@@ -11,7 +11,7 @@ const LEVELS = window.LEVELS;
 /* ---------- Speicher ---------- */
 const KEY = "norsk-progress-v1";
 const blank = () => ({ lessons: {}, levels: {}, seen: {}, cards: {}, xp: 0, streak: { n: 0, last: "" }, rate: 0.9,
-  goal: 20, day: { d: "", n: 0 }, best: 0, badges: {}, skill: {}, chars: {}, dialogs: {}, warm: "", remind: "18:00", perfect: 0 });
+  goal: 20, day: { d: "", n: 0 }, best: 0, badges: {}, skill: {}, chars: {}, dialogs: {}, warm: "", remind: "18:00", perfect: 0, vnew: 15, vday: { d: "", n: 0 } });
 let S;
 try { S = Object.assign(blank(), JSON.parse(localStorage.getItem(KEY) || "{}")); } catch (e) { S = blank(); }
 function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
@@ -179,7 +179,8 @@ function renderHome() {
     : ["God kveld! Fem minutter norsk?", "Guten Abend! Fünf Minuten Norwegisch?"];
   const coach = `<div class="coach">${VIKING.html(gp >= 100 ? "cheer" : "happy", 92, greet)}</div>`;
   hero = coach + goalCard + warm + hero;
-  const cardsHint = due && !warm ? `<button class="lesson" id="gocards"><span class="dot" style="background:#e3a008">🃏</span><span class="lt"><b>${due} Karten zum Wiederholen</b><small>Kurz üben hält die Wörter im Kopf</small></span>›</button>` : "";
+  const vnw = vocNew(vocNewLeft()).length, vtodo = Math.min(due, 30) + vnw;
+  const cardsHint = !warm && vtodo ? `<button class="lesson" id="gocards"><span class="dot" style="background:#e3a008">📚</span><span class="lt"><b>Wortschatz heute</b><small>${due ? due + " Wiederholungen" : ""}${due && vnw ? " · " : ""}${vnw ? vnw + " neue Wörter" : ""}</small></span>›</button>` : "";
   let html = hero + cardsHint;
   LEVELS.forEach((L, i) => {
     const open = levelOpen(i);
@@ -201,7 +202,7 @@ function renderHome() {
   $app.innerHTML = html;
   const go = document.getElementById("go");
   if (go) go.onclick = () => n.exam ? startExam(LEVELS[n.li].id) : openLesson(LEVELS[n.li].lessons[n.ji].id);
-  const gc = document.getElementById("gocards"); if (gc) gc.onclick = () => goTab("cards");
+  const gc = document.getElementById("gocards"); if (gc) gc.onclick = () => dailyWords(() => goTab("home"));
   const wb = document.getElementById("warm");
   if (wb) wb.onclick = () => { cardDir = "no"; cardSession(pick(dueList, 8), true, () => { S.warm = today(); save(); goTab("home"); }); };
   const sw = document.getElementById("skipwarm"); if (sw) sw.onclick = () => { S.warm = today(); save(); renderHome(); };
@@ -577,6 +578,7 @@ function deck() {
     les.items.forEach(it => out.push({ key: les.id + "|" + it[0], no: it[0], de: it[1], pron: it[2], lv: L.id }));
     les.sent.forEach(s => out.push({ key: les.id + "|" + s[0], no: s[0], de: s[1], lv: L.id }));
   }));
+  VOC.forEach(v => { if (S.cards[v.key]) out.push(v); });
   return out;
 }
 function cardResult(key, ok, skip) {
@@ -591,29 +593,71 @@ function dueCards() {
   return deck().filter(c => S.cards[c.key] && S.cards[c.key].d <= t);
 }
 let cardDir = "no";
+/* ---------- Wortschatz-Trainer ---------- */
+const VOC = (() => {
+  const seen = new Set(), out = [];
+  LEVELS.forEach(L => L.lessons.forEach(l => l.items.forEach(i => seen.add(i[0].toLowerCase()))));
+  (window.VOCAB || []).forEach((g, gi) => g.w.split("|").forEach(p => {
+    const k = p.indexOf("="); if (k < 0) return;
+    const no = p.slice(0, k).trim(), de = p.slice(k + 1).trim(), lo = no.toLowerCase();
+    if (!no || !de || seen.has(lo)) return; seen.add(lo);
+    out.push({ key: "v|" + no, no, de, lv: g.lv, t: g.t, kind: g.k || "core", gi });
+  }));
+  const li = id => LEVELS.findIndex(l => l.id === id);
+  return out.map((v, i) => [v, i]).sort((x, y) => li(x[0].lv) - li(y[0].lv) || x[1] - y[1]).map(x => x[0]);
+})();
+const VGROUPS = (window.VOCAB || []).map((g, gi) => ({ gi, lv: g.lv, t: g.t, kind: g.k || "core", n: VOC.filter(v => v.gi === gi).length })).filter(g => g.n);
+const ALLWORDS = (() => { const a = []; LEVELS.forEach(L => L.lessons.forEach(l => l.items.forEach(i => a.push({ no: i[0], de: i[1], lv: L.id, t: l.t })))); VOC.forEach(v => a.push(v)); return a; })();
+function vocMaxLevel() { let m = 0; LEVELS.forEach((L, i) => { if (levelOpen(i)) m = i; }); return m; }
+function vocNewLeft() { return Math.max(0, S.vnew - (S.vday.d === today() ? S.vday.n : 0)); }
+function vocNew(n) { const m = vocMaxLevel(); return VOC.filter(v => !S.cards[v.key] && levelIdx(v.lv) <= m).slice(0, n); }
+function knownCount() { return Object.entries(S.cards).filter(([k, c]) => c.b >= 3 && (k.startsWith("v|") || !/\s\S+\s/.test(k.split("|")[1] || ""))).length; }
+function vocToday() { const due = dueCards(), nw = vocNew(vocNewLeft()); return { due, nw }; }
+function dailyWords(onDone) {
+  const { due, nw } = vocToday();
+  const list = pick(due, 30).concat(nw.map(v => Object.assign({ isNew: true }, v)));
+  if (!list.length) { toast("Für heute ist alles erledigt ✓"); return; }
+  cardDir = "no"; cardSession(list, true, onDone);
+}
 function renderCards() {
-  const d = deck();
-  const due = dueCards();
-  const fresh = d.filter(c => !S.cards[c.key]);
+  const d = deck(), due = dueCards(), left = vocNewLeft(), nw = vocNew(left);
+  const total = ALLWORDS.length, known = knownCount(), started = Object.keys(S.cards).length;
   const counts = [0, 0, 0, 0, 0, 0, 0];
   d.forEach(c => counts[S.cards[c.key] ? S.cards[c.key].b : 0]++);
-  if (!d.length) {
-    $app.innerHTML = `<h1>Vokabelkarten</h1><div class="card"><p>Hier sammeln sich alle Wörter aus deinen Lektionen. Öffne deine erste Lektion, dann geht's los!</p><button class="btn" id="g">Zur ersten Lektion</button></div>`;
-    document.getElementById("g").onclick = () => { tab = "home"; openLesson(LEVELS[0].lessons[0].id); };
-    return;
-  }
-  $app.innerHTML = `<h1>Vokabelkarten</h1>
-    <div class="card"><p><b>${due.length}</b> fällig · <b>${fresh.length}</b> neu · ${d.length} insgesamt</p>
-    <div class="boxes">${["Neu", "1", "2", "3", "4", "5", "Sicher"].map((n, i) => `<div><b>${counts[i]}</b>${n}</div>`).join("")}</div>
-    <p class="muted" style="font-size:14px">Gewusste Karten wandern ein Fach weiter und kommen seltener. Nicht gewusste starten wieder in Fach 1.</p></div>
-    <div class="seg" id="dir"><button data-d="no" class="${cardDir === "no" ? "on" : ""}">Norwegisch → Deutsch</button><button data-d="de" class="${cardDir === "de" ? "on" : ""}">Deutsch → Norwegisch</button></div>
-    <button class="btn" id="go" ${due.length || fresh.length ? "" : "disabled"}>${due.length ? `${Math.min(due.length, 20)} fällige Karten üben` : fresh.length ? `${Math.min(fresh.length, 10)} neue Karten lernen` : "Alles erledigt für heute ✓"}</button>
-    <button class="btn ghost" id="all">Alle ${d.length} Karten durchblättern</button>
-    <h2>Filter nach Stufe</h2><div class="row" style="flex-wrap:wrap">${[...new Set(d.map(c => c.lv))].map(l => `<button class="btn ghost" style="flex:0 0 auto;width:auto;padding:10px 16px" data-lv="${l}">${l}</button>`).join("")}</div>`;
+  const lvMax = vocMaxLevel();
+  const groups = k => VGROUPS.filter(g => g.kind === k && levelIdx(g.lv) <= lvMax);
+  const chip = g => { const ws = VOC.filter(v => v.gi === g.gi), kn = ws.filter(v => S.cards[v.key] && S.cards[v.key].b >= 3).length;
+    return `<button class="chip" data-g="${g.gi}"><b>${esc(g.t)}</b><small>${g.lv} · ${kn}/${g.n}</small></button>`; };
+  const todo = Math.min(due.length, 30) + nw.length;
+  $app.innerHTML = `<h1>Wortschatz</h1>
+    <div class="card"><div class="vk-row"><div><b style="font-size:26px">${known.toLocaleString("de-DE")}</b> <span class="muted">sicher gelernt</span></div><div class="muted" style="text-align:right">${started.toLocaleString("de-DE")} begonnen<br>${total.toLocaleString("de-DE")} in der App</div></div>
+      <div class="bar"><i style="width:${Math.min(100, known / 100)}%"></i></div><p class="muted" style="font-size:14px;margin:6px 0 0">Ziel C1: rund 10.000 Wörter. Jeden Tag ein paar, und die App erinnert dich zur richtigen Zeit.</p></div>
+    <div class="card hero"><h1 style="margin:0 0 6px">📚 Heute</h1><p style="margin:0 0 12px;color:#dfe6ff">${due.length ? `<b>${due.length}</b> Wiederholungen` : "Keine Wiederholungen"} · ${nw.length ? `<b>${nw.length}</b> neue Wörter` : "keine neuen Wörter mehr heute"}</p>
+      <button class="btn" id="today" ${todo ? "" : "disabled"}>${todo ? `Los geht's (ca. ${Math.max(1, Math.round(todo / 6))} Min.) ›` : "Alles erledigt für heute ✓"}</button></div>
+    <div class="row" style="gap:8px;align-items:center"><span class="muted" style="font-size:14px">Neue Wörter pro Tag:</span><div class="seg" id="vnew" style="flex:1">${[5, 15, 30].map(n => `<button data-n="${n}" class="${S.vnew === n ? "on" : ""}">${n}</button>`).join("")}</div></div>
+    <div class="seg" id="dir"><button data-d="no" class="${cardDir === "no" ? "on" : ""}">🇳🇴 → 🇩🇪</button><button data-d="de" class="${cardDir === "de" ? "on" : ""}">🇩🇪 → 🇳🇴</button></div>
+    <input class="txt" id="q" type="search" placeholder="🔍 Wort suchen (norwegisch oder deutsch) …" autocomplete="off" style="margin-top:6px">
+    <div id="res"></div>
+    <details class="card" ${groups("core").length ? "" : "hidden"}><summary><b>Themen</b> <span class="muted">· gezielt üben</span></summary><div class="chips">${groups("core").map(chip).join("")}</div></details>
+    <details class="card" ${groups("eigen").length ? "" : "hidden"}><summary><b>Eigenheiten</b> <span class="muted">· Redewendungen, Dialekte, Umgangssprache</span></summary><div class="chips">${groups("eigen").map(chip).join("")}</div></details>
+    <details class="card"><summary><b>Karteikasten</b> <span class="muted">· ${d.length} Karten</span></summary>
+      <div class="boxes">${["Neu", "1", "2", "3", "4", "5", "Sicher"].map((n, i) => `<div><b>${counts[i]}</b>${n}</div>`).join("")}</div>
+      <p class="muted" style="font-size:14px">Gewusste Karten wandern ein Fach weiter und kommen seltener. Nicht gewusste starten wieder in Fach 1.</p>
+      <button class="btn ghost" id="all" ${d.length ? "" : "disabled"}>Alle Karten durchblättern</button></details>
+    ${lvMax < LEVELS.length - 1 ? `<p class="muted center" style="font-size:14px">Neue Wörter kommen aus den Stufen, die du schon freigeschaltet hast. Mit jeder bestandenen Prüfung kommen weitere dazu.</p>` : ""}`;
+  document.getElementById("today").onclick = () => dailyWords();
+  document.querySelectorAll("#vnew button").forEach(b => b.onclick = () => { S.vnew = +b.dataset.n; save(); renderCards(); });
   document.querySelectorAll("#dir button").forEach(b => b.onclick = () => { cardDir = b.dataset.d; renderCards(); });
-  document.getElementById("go").onclick = () => cardSession(due.length ? pick(due, 20) : fresh.slice(0, 10), true);
   document.getElementById("all").onclick = () => cardSession(shuffle(d), false);
-  document.querySelectorAll("[data-lv]").forEach(b => b.onclick = () => cardSession(shuffle(d.filter(c => c.lv === b.dataset.lv)), true));
+  document.querySelectorAll("[data-g]").forEach(b => b.onclick = () => cardSession(shuffle(VOC.filter(v => v.gi === +b.dataset.g)).slice(0, 20), true));
+  const q = document.getElementById("q"), res = document.getElementById("res");
+  q.oninput = () => {
+    const t = fold(q.value);
+    if (t.length < 2) { res.innerHTML = ""; return; }
+    const hits = ALLWORDS.filter(w => fold(w.no).includes(t) || fold(w.de).includes(t)).sort((a, b) => (fold(a.no).startsWith(t) ? 0 : 1) - (fold(b.no).startsWith(t) ? 0 : 1)).slice(0, 40);
+    res.innerHTML = hits.length ? `<div class="card wl">${hits.map((w, i) => `<button class="wrow" data-i="${i}"><span><b>${esc(w.no)}</b><small>${esc(w.de)}</small></span><span class="muted">${w.lv} 🔊</span></button>`).join("")}</div>` : `<p class="muted">Nichts gefunden.</p>`;
+    res.querySelectorAll(".wrow").forEach(b => b.onclick = () => speak(hits[+b.dataset.i].no));
+  };
 }
 function cardSession(list, grade, onDone) {
   setFocus(true);
@@ -628,14 +672,15 @@ function cardSession(list, grade, onDone) {
       return;
     }
     const c = list[k];
-    $app.innerHTML = `<div class="counter">${k + 1} / ${list.length}</div><div class="bar"><i style="width:${k / list.length * 100}%"></i></div>
+    $app.innerHTML = `<div class="counter">${c.isNew ? `<span class="newtag">NEU</span> ` : ""}${k + 1} / ${list.length}</div><div class="bar"><i style="width:${k / list.length * 100}%"></i></div>
       ${cardFace(c.no, c.de, c.pron, { rev })}
       ${grade ? `<div class="row"><button class="btn red" id="no">✗ Nochmal</button><button class="btn ok" id="yes">✓ Gewusst</button></div>` : `<button class="btn" id="yes">Weiter ›</button>`}`;
     wireCard(c.no, !rev);
     const f = document.getElementById("flip");
     if (rev) f.addEventListener("click", () => { if (f.classList.contains("on")) speak(c.no); });
-    document.getElementById("yes").onclick = () => { if (grade) { cardResult(c.key, true); known++; addDaily(1); } k++; show(); };
-    const no = document.getElementById("no"); if (no) no.onclick = () => { cardResult(c.key, false); addDaily(1); list.push(c); k++; show(); };
+    const markNew = () => { if (c.isNew && !c.counted) { c.counted = true; if (S.vday.d !== today()) S.vday = { d: today(), n: 0 }; S.vday.n++; } };
+    document.getElementById("yes").onclick = () => { if (grade) { markNew(); cardResult(c.key, true); known++; addDaily(1); } k++; show(); };
+    const no = document.getElementById("no"); if (no) no.onclick = () => { markNew(); cardResult(c.key, false); addDaily(1); list.push(c); k++; show(); };
   };
   show();
 }

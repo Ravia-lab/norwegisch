@@ -1,16 +1,9 @@
 // Wortschatz nach Häufigkeit: kompakte Lektionen je Stufe. Format der Wortliste: "norsk = deutsch | norsk = deutsch".
-// Wörter, die schon in einer anderen Lektion vorkommen, werden automatisch übersprungen.
+// Doppelte werden im Trainer automatisch übersprungen.
 (function () {
-const seen = new Set();
-window.LEVELS.forEach(L => L.lessons.forEach(l => l.items.forEach(i => seen.add(i[0].toLowerCase()))));
-const W = (lvl, id, t, intro, list, sent, gram) => {
-  const items = list.split("|").map(p => p.split("=").map(x => x.trim())).filter(p => p[0] && !seen.has(p[0].toLowerCase()));
-  items.forEach(i => seen.add(i[0].toLowerCase()));
-  const les = { id, t: "📚 " + t, intro: "<p><b>Wortschatz nach Häufigkeit.</b> " + intro + "</p>", items, sent };
-  if (gram) les.gram = gram;
-  window.LEVELS.find(l => l.id === lvl).lessons.push(les);
-};
-
+window.VOCAB = window.VOCAB || [];
+// Früher eigene Lektionen; jetzt Teil des Wortschatz-Trainers (Themen). Beispielsätze und Übungen bleiben als Referenz erhalten.
+const W = (lvl, id, t, intro, list) => { window.VOCAB.push({ lv: lvl, t, w: list }); };
 /* ---------- A1 ---------- */
 W("A1", "a1-f1", "Top-Verben 1", "Diese Verben machen einen großen Teil jedes Gesprächs aus.",
   "være = sein | ha = haben | gjøre = machen / tun | si = sagen | få = bekommen | gå = gehen | komme = kommen | se = sehen | ta = nehmen | gi = geben | vite = wissen | tenke = denken | bli = werden / bleiben | finne = finden | bruke = benutzen | trenge = brauchen | vente = warten | begynne = anfangen | sitte = sitzen | stå = stehen | ligge = liegen | sove = schlafen | lese = lesen | høre = hören | spørre = fragen",
