@@ -64,7 +64,16 @@ const PH = {
   wrong: [["Ikke gi opp!", "Nicht aufgeben!"], ["Nesten!", "Fast!"], ["Feil er lov!", "Fehler sind erlaubt!"], ["Øvelse gjør mester!", "Übung macht den Meister!"], ["Du klarer det!", "Du schaffst das!"], ["Pust ut, prøv igjen!", "Durchatmen, nochmal!"]],
   pass: [["Hurra! Du klarte det!", "Hurra, du hast es geschafft!"], ["Skål for deg!", "Ein Hoch auf dich!"], ["Du er en ekte viking!", "Du bist ein echter Wikinger!"]],
   fail: [["Ingen fare! Vi prøver igjen.", "Kein Problem! Wir versuchen es nochmal."], ["Selv vikinger øver mye!", "Auch Wikinger üben viel!"], ["Snart sitter det!", "Bald sitzt es!"]],
-  start: [["La oss lære!", "Lass uns lernen!"], ["Klar? Ferdig? Gå!", "Auf die Plätze, fertig, los!"], ["Dette blir gøy!", "Das wird lustig!"]]
+  start: [["La oss lære!", "Lass uns lernen!"], ["Klar? Ferdig? Gå!", "Auf die Plätze, fertig, los!"], ["Dette blir gøy!", "Das wird lustig!"]],
+  cards: [["Litt hver dag!", "Jeden Tag ein bisschen!"], ["Ord for ord blir du flink!", "Wort für Wort wirst du gut!"], ["Hjernen din elsker repetisjon!", "Dein Gehirn liebt Wiederholung!"]],
+  cardsdone: [["Alt er gjort for i dag!", "Für heute ist alles erledigt!"], ["Godt jobba! Hvil hjernen litt.", "Gut gemacht! Gönn deinem Kopf eine Pause."]],
+  round: [["Bra runde!", "Gute Runde!"], ["Ordene sitter!", "Die Wörter sitzen!"], ["Du blir bedre hver dag!", "Du wirst jeden Tag besser!"]],
+  roundmeh: [["Det kommer!", "Das wird schon!"], ["De vanskelige ordene kommer igjen snart.", "Die schweren Wörter kommen bald wieder."]],
+  dialogs: [["La oss prate!", "Lass uns reden!"], ["Snakk i vei – ingen dømmer deg!", "Rede einfach drauflos – niemand urteilt!"], ["Øvelse gjør mester!", "Übung macht den Meister!"]],
+  sounds: [["Hør godt etter!", "Hör genau hin!"], ["Norsk synger litt – hør på melodien!", "Norwegisch singt ein bisschen – hör auf die Melodie!"]],
+  me: [["Se hvor langt du har kommet!", "Schau, wie weit du gekommen bist!"], ["Jeg er stolt av deg!", "Ich bin stolz auf dich!"]],
+  exam: [["Nå gjelder det! Du klarer det.", "Jetzt gilt's! Du schaffst das."], ["Pust rolig – du kan dette!", "Ruhig atmen – du kannst das!"]],
+  badge: [["Wow, et nytt merke!", "Wow, ein neues Abzeichen!"], ["Hurra! Du har låst opp noe!", "Hurra! Du hast etwas freigeschaltet!"], ["Ekte vikingstyrke!", "Echte Wikingerstärke!"]]
 };
 const rnd = a => a[Math.random() * a.length | 0];
 window.VIKING = {

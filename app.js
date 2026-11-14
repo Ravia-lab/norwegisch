@@ -11,7 +11,7 @@ const LEVELS = window.LEVELS;
 /* ---------- Speicher ---------- */
 const KEY = "norsk-progress-v1";
 const blank = () => ({ lessons: {}, levels: {}, seen: {}, cards: {}, xp: 0, streak: { n: 0, last: "" }, rate: 0.9,
-  goal: 20, day: { d: "", n: 0 }, best: 0, badges: {}, skill: {}, chars: {}, dialogs: {}, warm: "", remind: "18:00", perfect: 0, vnew: 15, vday: { d: "", n: 0 } });
+  goal: 20, day: { d: "", n: 0 }, best: 0, badges: {}, skill: {}, chars: {}, dialogs: {}, warm: "", remind: "18:00", perfect: 0, vnew: 15, vday: { d: "", n: 0 }, st: {} });
 let S;
 try { S = Object.assign(blank(), JSON.parse(localStorage.getItem(KEY) || "{}")); } catch (e) { S = blank(); }
 function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
@@ -22,7 +22,10 @@ function todayCount() { return S.day.d === today() ? S.day.n : 0; }
 function addDaily(n) {
   if (S.day.d !== today()) S.day = { d: today(), n: 0 };
   const before = S.day.n; S.day.n += n;
+  const st = S.st = S.st || {}, h = new Date().getHours();
+  if (h < 7) st.early = 1; if (h >= 22) st.night = 1;
   if (before < S.goal && S.day.n >= S.goal) {
+    st.goalDays = (st.goalDays || 0) + 1; const wd = new Date().getDay(); if (wd === 0 || wd === 6) st.weekend = 1;
     bumpStreak(); S.xp += 30; VIKING.confetti();
     toast(`🎯 Tagesziel erreicht! 🔥 ${S.streak.n} ${S.streak.n === 1 ? "Tag" : "Tage"} in Folge (+30 ✦)`);
   }
@@ -89,8 +92,8 @@ const canListen = !!SR;
 let srLang = "nb-NO";
 /* Norwegisch-Sprachpaket fürs Gerät (Chrome 139+: SpeechRecognition.available/install) */
 const PACK_LANGS = ["nb-NO", "no-NO"];
-let packLocal = false, packAsked = false;
-const packApi = () => !!(SR && SR.available && SR.install);
+let packLocal = false, packAsked = false, packChecked = false;
+const packApi = () => !!(SR && SR.available && SR.install) && !navigator.webdriver;
 async function packStatus() {
   if (!packApi()) return "unsupported";
   for (const l of PACK_LANGS) {
@@ -101,8 +104,6 @@ async function packStatus() {
 async function packInstall() {
   try { return await SR.install({ langs: [srLang], processLocally: true }); } catch (e) { return false; }
 }
-async function packInit() { if ((await packStatus()) === "available") packLocal = true; }
-if (packApi()) packInit();
 function packOffer(out, then, force) {
   if (packLocal || (packAsked && !force) || !packApi()) return then();
   packStatus().then(st => {
@@ -440,6 +441,7 @@ function startExam(lid) {
   const L = LEVELS[levelIdx(lid)];
   setFocus(true);
   $app.innerHTML = `<div class="qtype">Abschlussprüfung</div><h1>${esc(L.title)}</h1>
+    <div class="coach small">${VIKING.html("happy", 70, VIKING.phrase("exam"))}</div>
     <div class="card"><p>${EXAM_SIZE} gemischte Fragen aus allen Lektionen dieser Stufe: Hören, Lesen, Schreiben${canListen ? ", Sprechen" : ""} und Leseverstehen.</p>
     <p>Du brauchst <b>${PASS} %</b>, um ${LEVELS[levelIdx(lid) + 1] ? "<b>" + LEVELS[levelIdx(lid) + 1].id + "</b> freizuschalten" : "das Ziel C1 zu erreichen"}.</p></div>
     <button class="btn red" id="s">Prüfung starten</button>`;
@@ -564,8 +566,8 @@ function renderQ(q, el, answer) {
         <div class="tiles" id="built">${built.map((p, k) => `<button class="tile" data-b="${k}">${esc(p.w)}</button>`).join("")}</div>
         <div class="tiles pool">${pool.map((p, k) => `<button class="tile" data-p="${k}">${esc(p.w)}</button>`).join("")}</div>
         <button class="btn" id="chk" ${pool.length ? "disabled" : ""}>Prüfen</button>`;
-      el.querySelectorAll("[data-p]").forEach(b => b.onclick = () => { built.push(pool.splice(+b.dataset.p, 1)[0]); draw(); });
-      el.querySelectorAll("[data-b]").forEach(b => b.onclick = () => { pool.push(built.splice(+b.dataset.b, 1)[0]); draw(); });
+      el.querySelectorAll("[data-p]").forEach(b => b.onclick = () => { if (!pool[+b.dataset.p]) return; built.push(pool.splice(+b.dataset.p, 1)[0]); draw(); });
+      el.querySelectorAll("[data-b]").forEach(b => b.onclick = () => { if (!built[+b.dataset.b]) return; pool.push(built.splice(+b.dataset.b, 1)[0]); draw(); });
       el.querySelector("#chk").onclick = () => once(norm(built.map(p => p.w).join(" ")) === norm(q.ans));
     };
     draw();
@@ -693,6 +695,7 @@ function renderCards() {
     return `<button class="chip" data-g="${g.gi}"><b>${esc(g.t)}</b><small>${g.lv} · ${kn}/${g.n}</small></button>`; };
   const todo = Math.min(due.length, 30) + nw.length;
   $app.innerHTML = `<h1>Wortschatz</h1>
+    <div class="coach small">${todo ? VIKING.html("happy", 70, due.length >= 10 ? ["Tid for repetisjon!", `${due.length} Wörter wollen wiederholt werden.`] : VIKING.phrase("cards")) : VIKING.html("cheer", 70, VIKING.phrase("cardsdone"))}</div>
     <div class="card"><div class="vk-row"><div><b style="font-size:26px">${known.toLocaleString("de-DE")}</b> <span class="muted">sicher gelernt</span></div><div class="muted" style="text-align:right">${started.toLocaleString("de-DE")} begonnen<br>${total.toLocaleString("de-DE")} in der App</div></div>
       <div class="bar"><i style="width:${Math.min(100, known / 100)}%"></i></div><p class="muted" style="font-size:14px;margin:6px 0 0">Ziel C1: rund 10.000 Wörter. Jeden Tag ein paar, und die App erinnert dich zur richtigen Zeit.</p></div>
     <div class="card hero"><h1 style="margin:0 0 6px">📚 Heute</h1><p style="margin:0 0 12px;color:#dfe6ff">${due.length ? `<b>${due.length}</b> Wiederholungen` : "Keine Wiederholungen"} · ${nw.length ? `<b>${nw.length}</b> neue Wörter` : "keine neuen Wörter mehr heute"}</p>
@@ -728,8 +731,11 @@ function cardSession(list, grade, onDone) {
   const rev = cardDir === "de";
   const show = () => {
     if (k >= list.length) {
-      S.xp += known * 2; save(); updateStats(); checkBadges();
-      $app.innerHTML = `<div class="center"><div style="font-size:64px">🃏</div><h1>Runde geschafft!</h1><p>${grade ? `${known} von ${list.length} gewusst.` : "Alle Karten angesehen."}</p></div>
+      S.st = S.st || {}; S.st.rounds = (S.st.rounds || 0) + 1;
+      S.xp += known * 2; save(); updateStats(); setTimeout(checkBadges, 500);
+      const good = !grade || known >= list.length * 0.7;
+      if (good) VIKING.confetti();
+      $app.innerHTML = `<div class="center">${VIKING.html(good ? "cheer" : "happy", 120, VIKING.phrase(good ? "round" : "roundmeh"))}<h1>Runde geschafft!</h1><p>${grade ? `${known} von ${list.length} gewusst · +${known * 2} ✦` : "Alle Karten angesehen."}</p></div>
         <button class="btn" id="b">${onDone ? "Weiter zum Lernen ›" : "Zurück zu den Karten"}</button>`;
       document.getElementById("b").onclick = onDone || (() => goTab("cards"));
       return;
@@ -750,7 +756,7 @@ function cardSession(list, grade, onDone) {
 
 /* ---------- Laute ---------- */
 function renderSounds() {
-  $app.innerHTML = `<h1>Aussprache</h1><p class="muted">Tippe auf eine Zeile, um das Beispiel zu hören.</p>` +
+  $app.innerHTML = `<h1>Aussprache</h1><div class="coach small">${VIKING.html("happy", 70, VIKING.phrase("sounds"))}</div><p class="muted">Tippe auf eine Zeile, um das Beispiel zu hören.</p>` +
     window.SOUNDS.map(g => `<h2>${esc(g.h)}</h2><div class="card">${g.list.map(s => `<button class="sound" style="width:100%;background:none;border:0;border-bottom:1px solid var(--line);text-align:left" data-say="${esc(s[2])}"><span class="l">${esc(s[0])}</span><span class="d">${esc(s[1])}<br><small class="muted">Beispiel: <b>${esc(s[2])}</b></small></span>🔊</button>`).join("")}</div>`).join("") +
     (canListen ? `<h2>Freies Sprechen</h2><div class="card"><p>Sag irgendetwas auf Norwegisch – die App zeigt dir, was sie verstanden hat.</p><button class="btn red" id="free">🎤 Sprechen</button><p class="speakres center" id="fr"></p></div>` : "");
   $app.querySelectorAll("[data-say]").forEach(b => b.onclick = () => speak(b.dataset.say));
@@ -766,7 +772,9 @@ function renderMe() {
   const total = LEVELS.reduce((a, L) => a + L.lessons.length, 0);
   const done = Object.keys(S.lessons).filter(passedLesson).length;
   const lvl = [...LEVELS].reverse().find(L => passedLevel(L.id));
+  const nb = Object.keys(S.badges).length;
   $app.innerHTML = `<h1>Dein Fortschritt</h1>
+    <div class="coach small">${VIKING.html(nb ? "cheer" : "happy", 70, nb ? ["Jeg er stolt av deg!", `Rang ${rank().lv} · ${nb} von ${BADGES.length} Erfolgen – weiter so!`] : VIKING.phrase("me"))}</div>
     <div class="card"><p>Erreichtes Niveau: <b>${lvl ? lvl.id : "Anfänger"}</b></p><p>Lektionen bestanden: <b>${done} / ${total}</b></p>
       <div class="bar"><i style="width:${done / total * 100}%"></i></div>
       <p>🔥 ${streakNow()} Tag(e) in Folge (Rekord ${S.best || 0}) · ✦ ${S.xp} Punkte · 🃏 ${Object.keys(S.cards).length} Karten im Training</p>
@@ -774,8 +782,8 @@ function renderMe() {
     <h2>Rang</h2>
     <div class="card"><p><b>Rang ${rank().lv}</b> · noch ${rank().next} ✦ bis Rang ${rank().lv + 1}</p><div class="bar"><i style="width:${rank().p}%"></i></div>
       <p class="muted" style="font-size:14px">✦ gibt es für richtige Antworten, bestandene Tests, Dialoge, das Tagesziel und Abzeichen.</p></div>
-    <h2>Abzeichen <span class="muted" style="font-size:15px">${Object.keys(S.badges).length}/${BADGES.length}</span></h2>
-    <div class="badges">${BADGES.map(b => `<div class="badge ${S.badges[b[0]] ? "on" : ""}" title="${esc(b[3])}"><span>${b[1]}</span><b>${esc(b[2])}</b><small>${esc(b[3])}</small></div>`).join("")}</div>
+    <h2>Erfolge <span class="muted" style="font-size:15px">${nb}/${BADGES.length}</span></h2>
+    ${BCATS.map(c => `<h3 class="bcat">${c[1]} ${esc(c[2])}</h3><div class="badges">${BADGES.filter(b => b[5] === c[0]).map(badgeHTML).join("")}</div>`).join("")}
     <h2>Deine Stärken & Schwächen</h2>
     <div class="card">${weakSpots().length ? weakSpots().map(w => `<div class="skill"><span>${esc(w.label)}</span><div class="bar"><i style="width:${w.pct}%;background:${w.pct >= 80 ? "var(--ok)" : w.pct >= 60 ? "#e3a008" : "var(--bad)"}"></i></div><b>${w.pct} %</b></div>`).join("") +
       (weakSpots()[0].pct < 90 ? `<button class="btn red" id="weak">Gezielt üben: ${esc(weakSpots()[0].label)} ›</button>` : `<p class="muted">Alles im grünen Bereich – stark! 💪</p>`)
@@ -805,9 +813,13 @@ function renderMe() {
   document.getElementById("rate").oninput = e => { S.rate = +e.target.value; save(); };
   const pk = document.getElementById("pack");
   if (pk) { const pr = document.getElementById("packres");
-    packStatus().then(st => { pr.textContent = st === "available" ? "✅ Installiert – das Mikrofon erkennt Norwegisch direkt auf dem Gerät." : st === "unavailable" ? "Für Norwegisch bietet dein Gerät (noch) kein Paket an – die Erkennung läuft dann online über Google." : "Noch nicht installiert."; });
-    pk.onclick = () => { packAsked = false; packOffer(pr, () => {}); }; }
+    pr.textContent = S.pack ? "✅ Installiert – das Mikrofon erkennt Norwegisch direkt auf dem Gerät." : "Tippe, um zu prüfen, ob dein Handy ein Norwegisch-Paket anbietet.";
+    pk.onclick = () => { packAsked = false; pr.textContent = "Prüfe …"; packStatus().then(st => {
+      if (st === "available") { packLocal = true; S.pack = 1; save(); pr.textContent = "✅ Installiert – das Mikrofon erkennt Norwegisch direkt auf dem Gerät."; }
+      else if (st === "unavailable" || st === "unsupported") pr.textContent = "Für Norwegisch bietet dein Gerät (noch) kein Paket an – die Erkennung läuft dann online über Google.";
+      else packOffer(pr, () => {}, true); }); }; }
   const wk = document.getElementById("weak"); if (wk) wk.onclick = () => practiceWeak(weakSpots()[0]);
+  $app.querySelectorAll("[data-badge]").forEach(el => el.onclick = () => { const b = BADGES.find(x => x[0] === el.dataset.badge); if (b) badgeModal(b, !!S.badges[b[0]]); });
   document.querySelectorAll("#goalseg button").forEach(b => b.onclick = () => { S.goal = +b.dataset.g; save(); updateStats(); renderMe(); });
   document.getElementById("rtime").onchange = e => { S.remind = e.target.value; save(); writeMeta(); };
   document.getElementById("ics").onclick = icsFile;
@@ -880,31 +892,87 @@ function practiceWeak(spot) {
 
 /* ---------- Erfolge ---------- */
 function learnedWords() { return Object.values(S.cards).filter(c => c.b >= 3).length; }
+const lessonsPassed = () => Object.keys(S.lessons).filter(passedLesson).length;
+const stc = k => (S.st && S.st[k]) || 0;
+const EIGEN_GI = new Set(VGROUPS.filter(g => g.kind === "eigen").map(g => g.gi));
+const eigenKnown = () => VOC.filter(v => EIGEN_GI.has(v.gi) && S.cards[v.key] && S.cards[v.key].b >= 3).length;
+const hardDialogs = () => Object.values(S.dialogs).filter(x => x === 2).length;
+const skillOk = k => (S.skill[k] || [0])[0];
+const BCATS = [["learn", "📘", "Lernen"], ["words", "🧠", "Wortschatz"], ["streak", "🔥", "Dranbleiben"], ["talk", "🗣️", "Sprechen & Hören"], ["level", "🏔️", "Niveaus"], ["fun", "🎲", "Besondere"]];
+// [id, Symbol, Name, Beschreibung, Prüfung, Kategorie, Fortschritt [ist, ziel]]
+const prog = (f, n) => [() => f() >= n, () => [Math.min(f(), n), n]];
+const B = (id, ic, name, desc, cat, f, n) => { const [chk, pr] = prog(f, n); return [id, ic, name, desc, chk, cat, pr]; };
 const BADGES = [
-  ["first", "🌱", "Erster Schritt", "Erste Lektion bestanden", () => Object.keys(S.lessons).some(passedLesson)],
-  ["l5", "📘", "Fleißig", "5 Lektionen bestanden", () => Object.keys(S.lessons).filter(passedLesson).length >= 5],
-  ["l15", "📚", "Bücherwurm", "15 Lektionen bestanden", () => Object.keys(S.lessons).filter(passedLesson).length >= 15],
-  ["goal", "🎯", "Zielstrebig", "Tagesziel zum ersten Mal geschafft", () => (S.best || 0) >= 1],
-  ["s3", "🔥", "Auf Kurs", "3 Tage in Folge", () => (S.best || 0) >= 3],
-  ["s7", "🔥", "Eine Woche!", "7 Tage in Folge", () => (S.best || 0) >= 7],
-  ["s30", "🏔️", "Bergsteiger", "30 Tage in Folge", () => (S.best || 0) >= 30],
-  ["perfect", "💯", "Fehlerfrei", "Ein Test mit 100 %", () => (S.perfect || 0) >= 1],
-  ["w50", "🧠", "50 Wörter", "50 Karten sicher gelernt (Fach 3+)", () => learnedWords() >= 50],
-  ["w150", "🧠", "150 Wörter", "150 Karten sicher gelernt", () => learnedWords() >= 150],
-  ["speak", "🎤", "Plaudertasche", "20 Sprechübungen richtig", () => (S.skill["Sprechen"] || [0])[0] >= 20],
-  ["stress", "🎵", "Gutes Gehör", "20 × Betonung richtig erkannt", () => (S.skill["Betonung"] || [0])[0] >= 20],
-  ["dialog", "💬", "Erstes Gespräch", "Einen Dialog gesprochen", () => Object.keys(S.dialogs).length >= 1],
-  ["dialogs", "🗣️", "Gesprächsprofi", "Alle Dialoge gesprochen", () => window.DIALOGS.every(d => S.dialogs[d.id])],
-  ["A1", "🇳🇴", "A1 geschafft", "Abschlussprüfung A1 bestanden", () => passedLevel("A1")],
-  ["A2", "⛵", "A2 geschafft", "Abschlussprüfung A2 bestanden", () => passedLevel("A2")],
-  ["B1", "🏡", "B1 geschafft", "Abschlussprüfung B1 bestanden", () => passedLevel("B1")],
-  ["B2", "🏔️", "B2 geschafft", "Abschlussprüfung B2 bestanden", () => passedLevel("B2")],
-  ["C1", "👑", "C1 geschafft", "Du sprichst Norwegisch!", () => passedLevel("C1")]
+  B("first", "🌱", "Erster Schritt", "Erste Lektion bestanden", "learn", lessonsPassed, 1),
+  B("l5", "📘", "Fleißig", "5 Lektionen bestanden", "learn", lessonsPassed, 5),
+  B("l15", "📚", "Bücherwurm", "15 Lektionen bestanden", "learn", lessonsPassed, 15),
+  B("l30", "🎓", "Musterschüler", "30 Lektionen bestanden", "learn", lessonsPassed, 30),
+  B("perfect", "💯", "Fehlerfrei", "Ein Test mit 100 %", "learn", () => S.perfect || 0, 1),
+  B("perfect5", "🌟", "Perfektionist", "5 Tests mit 100 %", "learn", () => S.perfect || 0, 5),
+  B("perfect20", "💎", "Diamant", "20 Tests mit 100 %", "learn", () => S.perfect || 0, 20),
+  B("rank5", "⚔️", "Krieger", "Rang 5 erreicht", "learn", () => rank().lv, 5),
+  B("rank10", "🛡️", "Jarl", "Rang 10 erreicht", "learn", () => rank().lv, 10),
+  B("rank25", "👑", "Wikingerkönig", "Rang 25 erreicht", "learn", () => rank().lv, 25),
+  B("w50", "🧠", "50 Wörter", "50 Wörter sicher gelernt", "words", learnedWords, 50),
+  B("w150", "🧠", "150 Wörter", "150 Wörter sicher gelernt", "words", learnedWords, 150),
+  B("w500", "📗", "500 Wörter", "500 Wörter sicher – Alltag klappt", "words", learnedWords, 500),
+  B("w1000", "📙", "1.000 Wörter", "1.000 Wörter sicher gelernt", "words", learnedWords, 1000),
+  B("w2500", "📕", "2.500 Wörter", "2.500 Wörter – Zeitung lesen wird leichter", "words", learnedWords, 2500),
+  B("w5000", "🏛️", "5.000 Wörter", "5.000 Wörter – Nachrichten verstehen", "words", learnedWords, 5000),
+  B("w10000", "🌌", "10.000 Wörter", "10.000 Wörter – C1-Wortschatz!", "words", learnedWords, 10000),
+  B("eigen25", "🧩", "Redewendungs-Fan", "25 Eigenheiten & Redewendungen sicher", "words", eigenKnown, 25),
+  B("eigen150", "🦉", "Wie ein Einheimischer", "150 Eigenheiten & Redewendungen sicher", "words", eigenKnown, 150),
+  B("r10", "🃏", "Kartenspieler", "10 Wortschatz-Runden geschafft", "words", () => stc("rounds"), 10),
+  B("r100", "🎴", "Kartenkönig", "100 Wortschatz-Runden geschafft", "words", () => stc("rounds"), 100),
+  B("goal", "🎯", "Zielstrebig", "Tagesziel zum ersten Mal geschafft", "streak", () => stc("goalDays") || (S.best ? 1 : 0), 1),
+  B("goal10", "🏹", "Treffsicher", "Tagesziel an 10 Tagen geschafft", "streak", () => stc("goalDays"), 10),
+  B("goal100", "🎖️", "Unaufhaltsam", "Tagesziel an 100 Tagen geschafft", "streak", () => stc("goalDays"), 100),
+  B("s3", "🔥", "Auf Kurs", "3 Tage in Folge", "streak", () => S.best || 0, 3),
+  B("s7", "🔥", "Eine Woche!", "7 Tage in Folge", "streak", () => S.best || 0, 7),
+  B("s14", "🔥", "Zwei Wochen!", "14 Tage in Folge", "streak", () => S.best || 0, 14),
+  B("s30", "🏔️", "Bergsteiger", "30 Tage in Folge", "streak", () => S.best || 0, 30),
+  B("s100", "🌋", "Hundert Tage", "100 Tage in Folge", "streak", () => S.best || 0, 100),
+  B("s365", "☀️", "Ein ganzes Jahr", "365 Tage in Folge", "streak", () => S.best || 0, 365),
+  B("speak", "🎤", "Plaudertasche", "20 Sprechübungen richtig", "talk", () => skillOk("Sprechen"), 20),
+  B("speak100", "📣", "Redner", "100 Sprechübungen richtig", "talk", () => skillOk("Sprechen"), 100),
+  B("stress", "🎵", "Gutes Gehör", "20 × Betonung richtig erkannt", "talk", () => skillOk("Betonung"), 20),
+  B("hear", "🎧", "Radiohörer", "25 Hörverstehen-Fragen richtig", "talk", () => skillOk("Hörverstehen"), 25),
+  B("dialog", "💬", "Erstes Gespräch", "Einen Dialog gesprochen", "talk", () => Object.keys(S.dialogs).length, 1),
+  B("hard5", "🙈", "Ohne Spickzettel", "5 Dialoge ohne Text geschafft", "talk", hardDialogs, 5),
+  B("dialogs", "🗣️", "Gesprächsprofi", "Alle Dialoge gesprochen", "talk", () => Object.keys(S.dialogs).length, window.DIALOGS.length),
+  B("A1", "🇳🇴", "A1 geschafft", "Abschlussprüfung A1 bestanden", "level", () => +passedLevel("A1"), 1),
+  B("A2", "⛵", "A2 geschafft", "Abschlussprüfung A2 bestanden", "level", () => +passedLevel("A2"), 1),
+  B("B1", "🏡", "B1 geschafft", "Abschlussprüfung B1 bestanden", "level", () => +passedLevel("B1"), 1),
+  B("B2", "🏔️", "B2 geschafft", "Abschlussprüfung B2 bestanden", "level", () => +passedLevel("B2"), 1),
+  B("C1", "👑", "C1 geschafft", "Du sprichst Norwegisch!", "level", () => +passedLevel("C1"), 1),
+  B("early", "🌅", "Frühaufsteher", "Vor 7 Uhr morgens gelernt", "fun", () => stc("early"), 1),
+  B("night", "🌙", "Nachteule", "Nach 22 Uhr gelernt", "fun", () => stc("night"), 1),
+  B("weekend", "🏕️", "Wochenend-Wikinger", "Tagesziel am Wochenende geschafft", "fun", () => stc("weekend"), 1)
 ];
+function badgeHTML(b) {
+  const on = !!S.badges[b[0]], [cur, max] = b[6]();
+  return `<button class="badge ${on ? "on" : ""}" data-badge="${b[0]}"><span>${b[1]}</span><b>${esc(b[2])}</b><small>${esc(b[3])}</small>${on ? "" : max > 1 ? `<div class="bar mini"><i style="width:${cur / max * 100}%"></i></div><small>${cur.toLocaleString("de-DE")} / ${max.toLocaleString("de-DE")}</small>` : ""}</button>`;
+}
+const modalQ = []; let modalOpen = false;
+function badgeModal(b, on, fresh) {
+  if (modalOpen) { modalQ.push([b, on, fresh]); return; }
+  modalOpen = true;
+  const [cur, max] = b[6]();
+  const ph = fresh ? VIKING.phrase("badge") : on ? ["Allerede ditt!", "Diesen Erfolg hast du schon."] : ["Snart ditt!", max > 1 ? `Noch ${(max - cur).toLocaleString("de-DE")} bis zum Ziel.` : "Den holst du dir auch noch!"];
+  const m = document.createElement("div"); m.className = "bmodal";
+  m.innerHTML = `<div class="bm-card center">${fresh ? `<div class="qtype">Neuer Erfolg!</div>` : ""}<div class="bm-icon ${on ? "" : "off"}">${b[1]}</div><h2>${esc(b[2])}</h2><p class="muted">${esc(b[3])}${on && S.badges[b[0]] !== true ? ` · seit ${new Date(S.badges[b[0]]).toLocaleDateString("de-DE")}` : ""}</p>
+    ${!on && max > 1 ? `<div class="bar"><i style="width:${cur / max * 100}%"></i></div>` : ""}
+    ${VIKING.html(on ? "cheer" : "happy", 90, ph)}${fresh ? `<p><b>+25 ✦</b></p>` : ""}<button class="btn" id="bm-ok">${fresh ? "Super!" : "Schließen"}</button></div>`;
+  document.body.appendChild(m);
+  if (fresh) { VIKING.confetti(); setTimeout(() => speak(ph[0]), 300); }
+  const close = () => { m.remove(); modalOpen = false; const n = modalQ.shift(); if (n) badgeModal(...n); };
+  m.querySelector("#bm-ok").onclick = close; m.onclick = e => { if (e.target === m) close(); };
+}
 function checkBadges() {
+  if (inQuiz) return;
   const fresh = BADGES.filter(b => !S.badges[b[0]] && b[4]());
   fresh.forEach(b => { S.badges[b[0]] = today(); S.xp += 25; });
-  if (fresh.length) { save(); updateStats(); fresh.forEach(b => toast(`${b[1]} Neues Abzeichen: <b>${esc(b[2])}</b> (+25 ✦)`)); }
+  if (fresh.length) { save(); updateStats(); fresh.slice(0, 3).forEach(b => badgeModal(b, true, true)); if (fresh.length > 3) toast(`🏅 Und ${fresh.length - 3} weitere Erfolge – schau unter „Ich“!`); }
 }
 const rank = () => { const lv = Math.floor(S.xp / 250) + 1; return { lv, p: Math.round((S.xp % 250) / 250 * 100), next: 250 - S.xp % 250 }; };
 const toastQ = []; let toasting = false;
@@ -918,7 +986,7 @@ function nextToast() {
 
 /* ---------- Dialoge ---------- */
 function renderDialogs() {
-  $app.innerHTML = `<h1>Dialoge</h1><p class="muted">Alltagsgespräche zum Mitsprechen. Die App spricht die andere Person, du antwortest${canListen ? " ins Mikrofon" : " laut"}.</p>` +
+  $app.innerHTML = `<h1>Dialoge</h1><div class="coach small">${VIKING.html("wave", 70, VIKING.phrase("dialogs"))}</div><p class="muted">Alltagsgespräche zum Mitsprechen. Die App spricht die andere Person, du antwortest${canListen ? " ins Mikrofon" : " laut"}.</p>` +
     LEVELS.map((L, i) => {
       const ds = window.DIALOGS.filter(d => d.lv === L.id); if (!ds.length) return "";
       const open = levelOpen(i);
@@ -941,7 +1009,7 @@ function playDialog(d, hard) {
     const ctl = document.getElementById("ctl");
     if (k >= d.lines.length) {
       const first = !S.dialogs[d.id];
-      S.dialogs[d.id] = Math.max(S.dialogs[d.id] || 0, hard ? 2 : 1); S.xp += first ? 20 : 5; save();
+      S.dialogs[d.id] = Math.max(S.dialogs[d.id] || 0, hard ? 2 : 1); S.xp += first ? 20 : 5; save(); updateStats(); setTimeout(checkBadges, 1200);
       addDaily(d.lines.filter(l => l[0] === "B").length);
       VIKING.confetti();
       ctl.innerHTML = `<div class="center">${VIKING.html("cheer", 110, ["Bra snakka!", "Gut gesprochen!"])}<h2>Gespräch geschafft!</h2></div>
