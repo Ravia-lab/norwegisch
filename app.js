@@ -10,17 +10,29 @@ const LEVELS = window.LEVELS;
 
 /* ---------- Speicher ---------- */
 const KEY = "norsk-progress-v1";
-const blank = () => ({ lessons: {}, levels: {}, seen: {}, cards: {}, xp: 0, streak: { n: 0, last: "" }, rate: 0.9 });
+const blank = () => ({ lessons: {}, levels: {}, seen: {}, cards: {}, xp: 0, streak: { n: 0, last: "" }, rate: 0.9,
+  goal: 20, day: { d: "", n: 0 }, best: 0, badges: {}, skill: {}, chars: {}, dialogs: {}, warm: "", remind: "18:00", perfect: 0 });
 let S;
 try { S = Object.assign(blank(), JSON.parse(localStorage.getItem(KEY) || "{}")); } catch (e) { S = blank(); }
 function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
 const today = () => new Date().toISOString().slice(0, 10);
 function addDays(n) { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); }
+function streakNow() { return S.streak.last === today() || S.streak.last === addDays(-1) ? S.streak.n : 0; }
+function todayCount() { return S.day.d === today() ? S.day.n : 0; }
+function addDaily(n) {
+  if (S.day.d !== today()) S.day = { d: today(), n: 0 };
+  const before = S.day.n; S.day.n += n;
+  if (before < S.goal && S.day.n >= S.goal) {
+    bumpStreak(); S.xp += 30;
+    toast(`🎯 Tagesziel erreicht! 🔥 ${S.streak.n} ${S.streak.n === 1 ? "Tag" : "Tage"} in Folge (+30 ✦)`);
+  }
+  save(); writeMeta(); updateStats(); setTimeout(checkBadges, 900);
+}
 function bumpStreak() {
   const t = today();
   if (S.streak.last === t) return;
   S.streak.n = S.streak.last === addDays(-1) ? S.streak.n + 1 : 1;
-  S.streak.last = t; save();
+  S.streak.last = t; S.best = Math.max(S.best || 0, S.streak.n); save();
 }
 
 /* ---------- Hilfen ---------- */
@@ -115,7 +127,7 @@ let tab = "home", screenStack = [];
 const backBtn = document.getElementById("backBtn");
 function setFocus(on) { document.body.classList.toggle("focus", on); backBtn.classList.toggle("hidden", !on); }
 function updateStats() {
-  document.getElementById("stats").innerHTML = `<span title="Tage in Folge">🔥 ${S.streak.n}</span><span title="Punkte">✦ ${S.xp}</span>`;
+  document.getElementById("stats").innerHTML = `<span title="Tage in Folge">🔥 ${streakNow()}</span><span title="Tagesziel">🎯 ${Math.min(todayCount(), S.goal)}/${S.goal}</span><span title="Punkte">✦ ${S.xp}</span>`;
 }
 document.getElementById("tabs").addEventListener("click", e => {
   const b = e.target.closest("button"); if (!b) return;
@@ -137,6 +149,7 @@ function render() {
   if (tab === "home") renderHome();
   else if (tab === "cards") renderCards();
   else if (tab === "sounds") renderSounds();
+  else if (tab === "dialogs") renderDialogs();
   else renderMe();
 }
 
@@ -151,8 +164,14 @@ function renderHome() {
     hero = `<div class="card hero"><div class="muted" style="color:#c9d4ff">Als Nächstes · ${L.id}</div><h1>${esc(label)}</h1>
       <button class="btn" id="go">${n.exam ? "Prüfung starten" : "Weiterlernen"} ›</button></div>`;
   }
-  const due = dueCards().length;
-  const cardsHint = due ? `<button class="lesson" id="gocards"><span class="dot" style="background:#e3a008">🃏</span><span class="lt"><b>${due} Karten zum Wiederholen</b><small>Kurz üben hält die Wörter im Kopf</small></span>›</button>` : "";
+  const dueList = dueCards(), due = dueList.length;
+  const tc = todayCount(), gp = Math.min(100, Math.round(tc / S.goal * 100));
+  const goalCard = `<div class="card goal"><div class="ring" style="--p:${gp}"><span>${gp >= 100 ? "✓" : tc}</span></div>
+    <div class="lt"><b>${gp >= 100 ? "Tagesziel geschafft! 🎉" : `Tagesziel: ${tc} von ${S.goal} Aufgaben`}</b>
+    <small class="muted">${streakNow() ? `🔥 ${streakNow()} ${streakNow() === 1 ? "Tag" : "Tage"} in Folge – ${gp >= 100 ? "bis morgen!" : "bleib dran!"}` : "Schaffe dein Tagesziel und starte eine Serie 🔥"}</small></div></div>`;
+  const warm = due && S.warm !== today() ? `<div class="card warm"><b>☀️ Aufwärmen</b><p class="muted">${Math.min(due, 8)} Karten sind fällig. Kurz wiederholen, dann geht's weiter – so bleibt alles im Kopf.</p><button class="btn" id="warm">Aufwärmen (ca. 2 Min.) ›</button><button class="linkbtn" id="skipwarm">Heute überspringen</button></div>` : "";
+  hero = goalCard + warm + hero;
+  const cardsHint = due && !warm ? `<button class="lesson" id="gocards"><span class="dot" style="background:#e3a008">🃏</span><span class="lt"><b>${due} Karten zum Wiederholen</b><small>Kurz üben hält die Wörter im Kopf</small></span>›</button>` : "";
   let html = hero + cardsHint;
   LEVELS.forEach((L, i) => {
     const open = levelOpen(i);
@@ -175,6 +194,9 @@ function renderHome() {
   const go = document.getElementById("go");
   if (go) go.onclick = () => n.exam ? startExam(LEVELS[n.li].id) : openLesson(LEVELS[n.li].lessons[n.ji].id);
   const gc = document.getElementById("gocards"); if (gc) gc.onclick = () => goTab("cards");
+  const wb = document.getElementById("warm");
+  if (wb) wb.onclick = () => { cardDir = "no"; cardSession(pick(dueList, 8), true, () => { S.warm = today(); save(); goTab("home"); }); };
+  const sw = document.getElementById("skipwarm"); if (sw) sw.onclick = () => { S.warm = today(); save(); renderHome(); };
   $app.querySelectorAll("[data-les]").forEach(b => b.onclick = () => {
     const f = findLesson(b.dataset.les);
     if (lessonOpen(f.li, f.ji)) openLesson(b.dataset.les);
@@ -357,7 +379,7 @@ function runQuiz(qs, title, finish) {
     $app.innerHTML = `<div class="qbar"><div class="bar"><i style="width:${i / qs.length * 100}%"></i></div><span class="muted">${i + 1}/${qs.length}</span></div>
       <div class="qtype">${esc(q.label)}</div><div id="q"></div>`;
     renderQ(q, document.getElementById("q"), (ok, skip, extra) => {
-      if (!skip) { counted++; if (ok) right++; else wrong.push(q); }
+      if (!skip) { counted++; if (ok) right++; else wrong.push(q); track(q, ok, extra); addDaily(1); }
       if (q.key) cardResult(q.key, !!ok && !skip, skip);
       if (skip) { i++; return next(); }
       feedback(ok, q, extra, () => { i++; next(); });
@@ -367,7 +389,7 @@ function runQuiz(qs, title, finish) {
     inQuiz = false;
     const pct = counted ? Math.round(right / counted * 100) : 0;
     const r = finish(pct);
-    S.xp += right * 10 + (r.passed ? 50 : 0); bumpStreak(); save(); updateStats();
+    S.xp += right * 10 + (r.passed ? 50 : 0); if (pct === 100 && counted >= 5) S.perfect = (S.perfect || 0) + 1; save(); updateStats(); setTimeout(checkBadges, 600);
     const nx = nextStep();
     $app.innerHTML = `<div class="center"><div style="font-size:64px">${r.passed ? "🎉" : "💪"}</div>
       <div class="score" style="color:${r.passed ? "var(--ok)" : "var(--bad)"}">${pct} %</div>
@@ -555,16 +577,16 @@ function renderCards() {
   document.getElementById("all").onclick = () => cardSession(shuffle(d), false);
   document.querySelectorAll("[data-lv]").forEach(b => b.onclick = () => cardSession(shuffle(d.filter(c => c.lv === b.dataset.lv)), true));
 }
-function cardSession(list, grade) {
+function cardSession(list, grade, onDone) {
   setFocus(true);
   let k = 0, known = 0;
   const rev = cardDir === "de";
   const show = () => {
     if (k >= list.length) {
-      bumpStreak(); S.xp += known * 2; save(); updateStats();
+      S.xp += known * 2; save(); updateStats(); checkBadges();
       $app.innerHTML = `<div class="center"><div style="font-size:64px">🃏</div><h1>Runde geschafft!</h1><p>${grade ? `${known} von ${list.length} gewusst.` : "Alle Karten angesehen."}</p></div>
-        <button class="btn" id="b">Zurück zu den Karten</button>`;
-      document.getElementById("b").onclick = () => goTab("cards");
+        <button class="btn" id="b">${onDone ? "Weiter zum Lernen ›" : "Zurück zu den Karten"}</button>`;
+      document.getElementById("b").onclick = onDone || (() => goTab("cards"));
       return;
     }
     const c = list[k];
@@ -574,8 +596,8 @@ function cardSession(list, grade) {
     wireCard(c.no, !rev);
     const f = document.getElementById("flip");
     if (rev) f.addEventListener("click", () => { if (f.classList.contains("on")) speak(c.no); });
-    document.getElementById("yes").onclick = () => { if (grade) { cardResult(c.key, true); known++; } k++; show(); };
-    const no = document.getElementById("no"); if (no) no.onclick = () => { cardResult(c.key, false); list.push(c); k++; show(); };
+    document.getElementById("yes").onclick = () => { if (grade) { cardResult(c.key, true); known++; addDaily(1); } k++; show(); };
+    const no = document.getElementById("no"); if (no) no.onclick = () => { cardResult(c.key, false); addDaily(1); list.push(c); k++; show(); };
   };
   show();
 }
@@ -601,8 +623,26 @@ function renderMe() {
   $app.innerHTML = `<h1>Dein Fortschritt</h1>
     <div class="card"><p>Erreichtes Niveau: <b>${lvl ? lvl.id : "Anfänger"}</b></p><p>Lektionen bestanden: <b>${done} / ${total}</b></p>
       <div class="bar"><i style="width:${done / total * 100}%"></i></div>
-      <p>🔥 ${S.streak.n} Tag(e) in Folge · ✦ ${S.xp} Punkte · 🃏 ${Object.keys(S.cards).length} Karten im Training</p>
+      <p>🔥 ${streakNow()} Tag(e) in Folge (Rekord ${S.best || 0}) · ✦ ${S.xp} Punkte · 🃏 ${Object.keys(S.cards).length} Karten im Training</p>
       <div class="boxes">${LEVELS.map(L => `<div><b>${passedLevel(L.id) ? "✓" : levelOpen(levelIdx(L.id)) ? "…" : "🔒"}</b>${L.id}</div>`).join("")}</div></div>
+    <h2>Rang</h2>
+    <div class="card"><p><b>Rang ${rank().lv}</b> · noch ${rank().next} ✦ bis Rang ${rank().lv + 1}</p><div class="bar"><i style="width:${rank().p}%"></i></div>
+      <p class="muted" style="font-size:14px">✦ gibt es für richtige Antworten, bestandene Tests, Dialoge, das Tagesziel und Abzeichen.</p></div>
+    <h2>Abzeichen <span class="muted" style="font-size:15px">${Object.keys(S.badges).length}/${BADGES.length}</span></h2>
+    <div class="badges">${BADGES.map(b => `<div class="badge ${S.badges[b[0]] ? "on" : ""}" title="${esc(b[3])}"><span>${b[1]}</span><b>${esc(b[2])}</b><small>${esc(b[3])}</small></div>`).join("")}</div>
+    <h2>Deine Stärken & Schwächen</h2>
+    <div class="card">${weakSpots().length ? weakSpots().map(w => `<div class="skill"><span>${esc(w.label)}</span><div class="bar"><i style="width:${w.pct}%;background:${w.pct >= 80 ? "var(--ok)" : w.pct >= 60 ? "#e3a008" : "var(--bad)"}"></i></div><b>${w.pct} %</b></div>`).join("") +
+      (weakSpots()[0].pct < 90 ? `<button class="btn red" id="weak">Gezielt üben: ${esc(weakSpots()[0].label)} ›</button>` : `<p class="muted">Alles im grünen Bereich – stark! 💪</p>`)
+      : `<p class="muted">Mach ein paar Tests – dann siehst du hier, was schon gut sitzt und wo du gezielt üben kannst.</p>`}</div>
+    <h2>Tagesziel & Erinnerung</h2>
+    <div class="card">
+      <p>Wie viele Aufgaben pro Tag?</p>
+      <div class="seg" id="goalseg">${[10, 20, 40].map(g => `<button data-g="${g}" class="${S.goal === g ? "on" : ""}">${g === 10 ? "Locker · 10" : g === 20 ? "Normal · 20" : "Intensiv · 40"}</button>`).join("")}</div>
+      <label class="set">Tägliche Erinnerung um <input type="time" id="rtime" value="${esc(S.remind || "18:00")}"></label>
+      <button class="btn ghost" id="ics">📅 Erinnerung in den Kalender eintragen</button>
+      <button class="btn ghost" id="notif">🔔 Benachrichtigungen erlauben</button>
+      <p class="muted" id="nres" style="font-size:14px">Der Kalender-Eintrag klappt auf jedem Handy zuverlässig. Benachrichtigungen funktionieren nur in der installierten App auf Android.</p>
+    </div>
     <h2>Einstellungen</h2>
     <div class="card">
       ${!("speechSynthesis" in window) ? `<div class="notice">Dein Browser kann nicht vorlesen. Nutze Chrome, Edge oder Safari.</div>` : !voice ? `<div class="notice">Keine norwegische Stimme gefunden. Am Handy: Einstellungen → Sprache → Text-in-Sprache → Norwegisch installieren. Am PC klappt es meist in Chrome oder Edge.</div>` : `<p class="muted">Stimme: ${esc(voice.name)}</p>`}
@@ -616,6 +656,11 @@ function renderMe() {
       <div class="row"><button class="btn ghost" id="exp">Sichern</button><button class="btn ghost" id="imp">Laden</button></div>
       <button class="btn ghost" id="reset" style="color:var(--bad)">Alles zurücksetzen</button></div>`;
   document.getElementById("rate").oninput = e => { S.rate = +e.target.value; save(); };
+  const wk = document.getElementById("weak"); if (wk) wk.onclick = () => practiceWeak(weakSpots()[0]);
+  document.querySelectorAll("#goalseg button").forEach(b => b.onclick = () => { S.goal = +b.dataset.g; save(); updateStats(); renderMe(); });
+  document.getElementById("rtime").onchange = e => { S.remind = e.target.value; save(); writeMeta(); };
+  document.getElementById("ics").onclick = icsFile;
+  document.getElementById("notif").onclick = () => enableNotify(document.getElementById("nres"));
   document.getElementById("test").onclick = () => speak("Hei! Velkommen. Jeg heter Norsk, og jeg hjelper deg å lære norsk.");
   const rs = document.getElementById("reset");
   rs.onclick = () => { if (rs.dataset.armed) { S = blank(); save(); render(); } else { rs.dataset.armed = 1; rs.textContent = "Wirklich alles löschen? Nochmal tippen"; setTimeout(() => { if (rs.isConnected) { delete rs.dataset.armed; rs.textContent = "Alles zurücksetzen"; } }, 4000); } };
@@ -636,6 +681,167 @@ function renderMe() {
   }
 }
 
+/* ---------- Statistik & Schwächen ---------- */
+const SKILL_TYPE = { "Hören": "listen", "Lesen": "read", "Wortschatz": "reverse", "Schreiben": "write", "Diktat": "dict", "Sprechen": "speak", "Betonung": "stress", "Satzbau": "order" };
+function track(q, ok, extra) {
+  const s = S.skill[q.label] || (S.skill[q.label] = [0, 0]);
+  s[1]++; if (ok) s[0]++;
+  if (q.t === "write" && q.ans) for (const c of "æøå") if (q.ans.toLowerCase().includes(c)) {
+    const x = S.chars[c] || (S.chars[c] = [0, 0]); x[1]++;
+    if (ok && !(extra && extra.includes("æ ø å"))) x[0]++;
+  }
+}
+function weakSpots() {
+  const list = [];
+  Object.entries(S.skill).forEach(([k, v]) => { if (v[1] >= 3) list.push({ k, label: k, pct: Math.round(v[0] / v[1] * 100), n: v[1], kind: "skill" }); });
+  Object.entries(S.chars).forEach(([c, v]) => { if (v[1] >= 2) list.push({ k: c, label: `Buchstabe ${c}`, pct: Math.round(v[0] / v[1] * 100), n: v[1], kind: "char" }); });
+  return list.sort((a, b) => a.pct - b.pct);
+}
+function openItems() {
+  const out = [];
+  LEVELS.forEach((L, i) => L.lessons.forEach((les, j) => {
+    if (lessonOpen(i, j) && (S.seen[les.id] || S.lessons[les.id] != null)) les.items.forEach(it => out.push({ it, L, les }));
+  }));
+  return out;
+}
+function practiceWeak(spot) {
+  let items = openItems(), type = "read";
+  if (spot.kind === "char") { items = items.filter(x => x.it[0].toLowerCase().includes(spot.k) && words(x.it[0]).length <= 4); type = "write"; }
+  else type = SKILL_TYPE[spot.k] || "read";
+  if (type === "stress") items = items.filter(x => stressable(x.it));
+  if ((type === "write" || type === "dict") ) items = items.filter(x => words(x.it[0]).length <= 4);
+  if (type === "speak" && !canListen) type = "listen";
+  let qs;
+  if (type === "order") {
+    const sents = [];
+    LEVELS.forEach((L, i) => L.lessons.forEach((les, j) => { if (lessonOpen(i, j) && S.seen[les.id]) les.sent.forEach(s => sents.push({ s, les })); }));
+    qs = pick(sents, 8).map(x => sentQ(x.s, "order", x.les.id));
+  } else qs = pick(items, 10).map(x => itemQ(x.it, type, x.L, x.les.id));
+  if (!qs.length) { toast("Dafür gibt es noch nicht genug Wörter. Lerne erst ein paar Lektionen."); return; }
+  runQuiz(qs, "Schwächen üben", pct => ({ passed: pct >= PASS, again: () => practiceWeak(spot), title: "Training" }));
+}
+
+/* ---------- Erfolge ---------- */
+function learnedWords() { return Object.values(S.cards).filter(c => c.b >= 3).length; }
+const BADGES = [
+  ["first", "🌱", "Erster Schritt", "Erste Lektion bestanden", () => Object.keys(S.lessons).some(passedLesson)],
+  ["l5", "📘", "Fleißig", "5 Lektionen bestanden", () => Object.keys(S.lessons).filter(passedLesson).length >= 5],
+  ["l15", "📚", "Bücherwurm", "15 Lektionen bestanden", () => Object.keys(S.lessons).filter(passedLesson).length >= 15],
+  ["goal", "🎯", "Zielstrebig", "Tagesziel zum ersten Mal geschafft", () => (S.best || 0) >= 1],
+  ["s3", "🔥", "Auf Kurs", "3 Tage in Folge", () => (S.best || 0) >= 3],
+  ["s7", "🔥", "Eine Woche!", "7 Tage in Folge", () => (S.best || 0) >= 7],
+  ["s30", "🏔️", "Bergsteiger", "30 Tage in Folge", () => (S.best || 0) >= 30],
+  ["perfect", "💯", "Fehlerfrei", "Ein Test mit 100 %", () => (S.perfect || 0) >= 1],
+  ["w50", "🧠", "50 Wörter", "50 Karten sicher gelernt (Fach 3+)", () => learnedWords() >= 50],
+  ["w150", "🧠", "150 Wörter", "150 Karten sicher gelernt", () => learnedWords() >= 150],
+  ["speak", "🎤", "Plaudertasche", "20 Sprechübungen richtig", () => (S.skill["Sprechen"] || [0])[0] >= 20],
+  ["stress", "🎵", "Gutes Gehör", "20 × Betonung richtig erkannt", () => (S.skill["Betonung"] || [0])[0] >= 20],
+  ["dialog", "💬", "Erstes Gespräch", "Einen Dialog gesprochen", () => Object.keys(S.dialogs).length >= 1],
+  ["dialogs", "🗣️", "Gesprächsprofi", "Alle Dialoge gesprochen", () => window.DIALOGS.every(d => S.dialogs[d.id])],
+  ["A1", "🇳🇴", "A1 geschafft", "Abschlussprüfung A1 bestanden", () => passedLevel("A1")],
+  ["A2", "⛵", "A2 geschafft", "Abschlussprüfung A2 bestanden", () => passedLevel("A2")],
+  ["B1", "🏡", "B1 geschafft", "Abschlussprüfung B1 bestanden", () => passedLevel("B1")],
+  ["B2", "🏔️", "B2 geschafft", "Abschlussprüfung B2 bestanden", () => passedLevel("B2")],
+  ["C1", "👑", "C1 geschafft", "Du sprichst Norwegisch!", () => passedLevel("C1")]
+];
+function checkBadges() {
+  const fresh = BADGES.filter(b => !S.badges[b[0]] && b[4]());
+  fresh.forEach(b => { S.badges[b[0]] = today(); S.xp += 25; });
+  if (fresh.length) { save(); updateStats(); fresh.forEach(b => toast(`${b[1]} Neues Abzeichen: <b>${esc(b[2])}</b> (+25 ✦)`)); }
+}
+const rank = () => { const lv = Math.floor(S.xp / 250) + 1; return { lv, p: Math.round((S.xp % 250) / 250 * 100), next: 250 - S.xp % 250 }; };
+const toastQ = []; let toasting = false;
+function toast(html) { toastQ.push(html); if (!toasting) nextToast(); }
+function nextToast() {
+  const html = toastQ.shift(); if (!html) { toasting = false; return; }
+  toasting = true;
+  const t = document.createElement("div"); t.className = "toast"; t.innerHTML = html;
+  document.body.appendChild(t); setTimeout(() => t.classList.add("out"), 2300); setTimeout(() => { t.remove(); nextToast(); }, 2700);
+}
+
+/* ---------- Dialoge ---------- */
+function renderDialogs() {
+  $app.innerHTML = `<h1>Dialoge</h1><p class="muted">Alltagsgespräche zum Mitsprechen. Die App spricht die andere Person, du antwortest${canListen ? " ins Mikrofon" : " laut"}.</p>` +
+    LEVELS.map((L, i) => {
+      const ds = window.DIALOGS.filter(d => d.lv === L.id); if (!ds.length) return "";
+      const open = levelOpen(i);
+      return `<h2>${open ? "" : "🔒 "}${L.id}</h2>` + ds.map(d => `<button class="lesson ${S.dialogs[d.id] ? "done" : ""} ${open ? "" : "locked"}" data-d="${d.id}">
+        <span class="dot">${S.dialogs[d.id] ? "✓" : d.icon}</span><span class="lt"><b>${esc(d.t)}</b><small>${open ? `${d.lines.length} Sätze${S.dialogs[d.id] === 2 ? " · ⭐ auch ohne Text geschafft" : S.dialogs[d.id] ? " · Probier's ohne Text!" : ""}` : `Ab Stufe ${L.id}`}</small></span>${open ? "›" : ""}</button>`).join("");
+    }).join("");
+  $app.querySelectorAll("[data-d]").forEach(b => b.onclick = () => {
+    const d = window.DIALOGS.find(x => x.id === b.dataset.d);
+    if (levelOpen(levelIdx(d.lv))) playDialog(d, false);
+  });
+}
+function playDialog(d, hard) {
+  setFocus(true);
+  let k = 0;
+  const box = () => document.getElementById("chat");
+  $app.innerHTML = `<div class="qtype">${d.lv} · Dialog${hard ? " · ohne Text" : ""}</div><h1>${d.icon} ${esc(d.t)}</h1><div id="chat" class="chat"></div><div id="ctl"></div>`;
+  const bubble = (l, hide) => `<div class="bub ${l[0] === "A" ? "them" : "me"}"><div class="who">${l[0] === "A" ? "Gegenüber" : "Du"}</div>
+    <div class="no">${hide ? "<i class='muted'>(Antworte auf Norwegisch)</i>" : esc(l[1])}</div><div class="de">${esc(l[2])}</div></div>`;
+  const step = () => {
+    const ctl = document.getElementById("ctl");
+    if (k >= d.lines.length) {
+      const first = !S.dialogs[d.id];
+      S.dialogs[d.id] = Math.max(S.dialogs[d.id] || 0, hard ? 2 : 1); S.xp += first ? 20 : 5; save();
+      addDaily(d.lines.filter(l => l[0] === "B").length);
+      ctl.innerHTML = `<div class="center"><div style="font-size:48px">🎉</div><h2>Gespräch geschafft!</h2></div>
+        ${!hard ? `<button class="btn red" id="hard">Nochmal ohne Text (Profi)</button>` : ""}<button class="btn ghost" id="back">Zu den Dialogen</button>`;
+      const h = document.getElementById("hard"); if (h) h.onclick = () => playDialog(d, true);
+      document.getElementById("back").onclick = () => goTab("dialogs");
+      return;
+    }
+    const l = d.lines[k];
+    if (l[0] === "A") {
+      box().insertAdjacentHTML("beforeend", bubble(l)); speak(l[1]);
+      ctl.innerHTML = `<div class="row"><button class="btn ghost" id="rep" style="flex:0 0 64px">🔊</button><button class="btn" id="nx">Weiter ›</button></div>`;
+      document.getElementById("rep").onclick = () => speak(l[1]);
+      document.getElementById("nx").onclick = () => { k++; step(); };
+    } else {
+      box().insertAdjacentHTML("beforeend", bubble(l, hard));
+      const me = box().lastElementChild;
+      ctl.innerHTML = `${canListen ? `<button class="btn red" id="mic">🎤 Jetzt du – sprich deinen Satz</button>` : `<p class="muted center">Sprich den Satz laut nach.</p>`}
+        <div class="speakres center" id="sres"></div>
+        <div class="row"><button class="btn ghost" id="hear">🔊 Vorsagen</button><button class="btn ghost" id="nx">${canListen ? "Überspringen" : "Geschafft ›"}</button></div>`;
+      document.getElementById("hear").onclick = () => { speak(l[1]); if (hard) me.querySelector(".no").textContent = l[1]; };
+      document.getElementById("nx").onclick = () => { me.querySelector(".no").textContent = l[1]; k++; step(); };
+      const mic = document.getElementById("mic");
+      if (mic) mic.onclick = () => practiceSpeak(l[1], mic, document.getElementById("sres"), ok => {
+        if (ok) { me.classList.add("ok"); me.querySelector(".no").textContent = l[1]; (S.skill["Sprechen"] = S.skill["Sprechen"] || [0, 0]); S.skill["Sprechen"][0]++; S.skill["Sprechen"][1]++; setTimeout(() => { k++; step(); }, 800); }
+      });
+    }
+    box().lastElementChild.scrollIntoView({ behavior: "smooth", block: "end" });
+  };
+  step();
+}
+
+/* ---------- Erinnerung ---------- */
+function writeMeta() {
+  try { if ("caches" in window) caches.open("norsk-meta").then(c => c.put("meta", new Response(JSON.stringify({ last: S.day.n >= S.goal ? S.day.d : "", time: S.remind })))); } catch (e) {}
+}
+function icsFile() {
+  const [h, m] = (S.remind || "18:00").split(":");
+  const d = new Date(); const ymd = d.toISOString().slice(0, 10).replace(/-/g, "");
+  const body = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Norsk//DE", "BEGIN:VEVENT", "UID:norsk-daily@norsk",
+    `DTSTAMP:${ymd}T000000Z`, `DTSTART:${ymd}T${h}${m}00`, "DURATION:PT10M",
+    "RRULE:FREQ=DAILY", "SUMMARY:🇳🇴 Norwegisch lernen (10 Min.)", "DESCRIPTION:Tagesziel in der Norsk-App schaffen!",
+    "BEGIN:VALARM", "TRIGGER:PT0M", "ACTION:DISPLAY", "DESCRIPTION:Zeit für Norwegisch!", "END:VALARM", "END:VEVENT", "END:VCALENDAR"].join("\r\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([body], { type: "text/calendar" })); a.download = "norsk-erinnerung.ics"; a.click();
+}
+async function enableNotify(out) {
+  if (!("Notification" in window)) { out.textContent = "Dein Browser unterstützt keine Benachrichtigungen. Nimm die Kalender-Erinnerung."; return; }
+  const p = await Notification.requestPermission();
+  if (p !== "granted") { out.textContent = "Benachrichtigungen wurden nicht erlaubt."; return; }
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    if ("periodicSync" in reg) { await reg.periodicSync.register("norsk-reminder", { minInterval: 6 * 60 * 60 * 1000 }); out.textContent = "✓ Erinnerung aktiv. Das Handy entscheidet selbst, wann genau geprüft wird – für eine feste Uhrzeit nimm zusätzlich den Kalender."; }
+    else out.textContent = "Benachrichtigungen erlaubt, aber dieses Gerät kann sie nicht im Hintergrund planen. Nimm die Kalender-Erinnerung – die klappt überall.";
+    writeMeta();
+  } catch (e) { out.textContent = "Hintergrund-Erinnerung geht nur in der installierten App (Android/Chrome). Die Kalender-Erinnerung klappt überall."; }
+}
+
 /* ---------- PWA ---------- */
 let deferredPrompt = null;
 window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); deferredPrompt = e; });
@@ -644,4 +850,5 @@ if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
 }
 
 render();
+setTimeout(checkBadges, 1500);
 })();

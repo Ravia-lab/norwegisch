@@ -7,6 +7,12 @@ Installierbare Web-App (PWA) zum Norwegischlernen von null bis C1. Oberfläche D
 - Übungen: Hören, Lesen, Schreiben (mit æ ø å), Diktat, Satzbau, Sprechen (Spracherkennung), Leseverstehen, freies Schreiben
 - Jede Lektion endet mit einem Test (80 % zum Bestehen), jede Stufe mit einer Abschlussprüfung, die die nächste Stufe freischaltet
 - Ausspracheführer mit allen besonderen Lauten und Tonfall
+- Silbentrennung mit Betonung auf allen Karten, Übung „Welche Silbe wird betont?“
+- Tagesziel, Serie (Streak), Rang, 19 Abzeichen
+- Aufwärmen mit fälligen Karten zu Beginn
+- 10 Alltagsdialoge zum Mitsprechen (auch im Profi-Modus ohne Text)
+- Statistik der Stärken und Schwächen mit gezieltem Training
+- Tägliche Erinnerung per Kalender oder Benachrichtigung
 - Funktioniert offline, Fortschritt bleibt auf dem Gerät (Sichern/Laden möglich)
 
 Keine Abhängigkeiten, kein Build: einfach die Dateien auf einen Webserver legen (z. B. GitHub Pages).
