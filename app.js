@@ -87,17 +87,54 @@ function speak(text, slow) {
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 const canListen = !!SR;
 let srLang = "nb-NO";
-function listen(onResult, onEnd, retry) {
+/* Norwegisch-Sprachpaket fürs Gerät (Chrome 139+: SpeechRecognition.available/install) */
+const PACK_LANGS = ["nb-NO", "no-NO"];
+let packLocal = false, packAsked = false;
+const packApi = () => !!(SR && SR.available && SR.install);
+async function packStatus() {
+  if (!packApi()) return "unsupported";
+  for (const l of PACK_LANGS) {
+    try { const st = await SR.available({ langs: [l], processLocally: true }); if (st !== "unavailable") { srLang = l; return st; } } catch (e) {}
+  }
+  return "unavailable";
+}
+async function packInstall() {
+  try { return await SR.install({ langs: [srLang], processLocally: true }); } catch (e) { return false; }
+}
+async function packInit() { if ((await packStatus()) === "available") packLocal = true; }
+if (packApi()) packInit();
+function packOffer(out, then, force) {
+  if (packLocal || (packAsked && !force) || !packApi()) return then();
+  packStatus().then(st => {
+    if (st === "available") { packLocal = true; return then(); }
+    if (st !== "downloadable" && st !== "downloading") return then();
+    packAsked = true;
+    out.innerHTML = `<div class="notice" style="text-align:left">📦 <b>Norwegisch-Sprachpaket laden?</b><br>Damit versteht dich das Mikrofon viel besser und es funktioniert auch offline. Einmaliger Download, etwa 50–100 MB, am besten im WLAN.<div class="row" style="margin-top:8px"><button class="btn" id="pk-yes">Ja, laden</button><button class="btn ghost" id="pk-no">Später</button></div></div>`;
+    out.querySelector("#pk-no").onclick = () => { out.textContent = "Okay – tippe 🎤 und sprich. Das Paket findest du später unter Ich → Einstellungen."; };
+    out.querySelector("#pk-yes").onclick = async () => {
+      out.textContent = "⏳ Sprachpaket wird geladen … das kann eine Minute dauern.";
+      const ok = await packInstall();
+      if (ok && (await packStatus()) === "available") { packLocal = true; S.pack = 1; save(); out.textContent = "✅ Sprachpaket installiert. Tippe jetzt auf 🎤."; }
+      else out.textContent = "Das Paket wird im Hintergrund geladen. Versuch es gleich nochmal mit 🎤.";
+    };
+  });
+}
+function listen(onResult, onEnd, retry, target) {
   const r = new SR();
   r.lang = srLang; r.interimResults = false; r.maxAlternatives = 10; r.continuous = false;
+  if (packLocal && "processLocally" in r) {
+    r.processLocally = true;
+    try { if (target && window.SpeechRecognitionPhrase) r.phrases = [new SpeechRecognitionPhrase(String(target).replace(/[.!?]/g, ""), 5.0)]; } catch (e) {}
+  }
   let got = false, again = false;
   r.onresult = e => { got = true; const alts = []; for (const res of e.results) for (const a of res) alts.push(a.transcript); onResult(alts); };
   r.onerror = e => {
     if (e.error === "language-not-supported" && srLang !== "no-NO") { srLang = "no-NO"; again = true; return; }
     if (e.error === "no-speech" && !retry) { again = true; return; }
+    if (packLocal && !retry && (e.error === "language-not-supported" || e.error === "service-not-allowed")) { packLocal = false; again = true; return; }
     onEnd(e.error);
   };
-  r.onend = () => { if (again && !got) listen(onResult, onEnd, true); else onEnd(); };
+  r.onend = () => { if (again && !got) listen(onResult, onEnd, true, target); else onEnd(); };
   try { r.start(); } catch (e) { onEnd("start"); }
   return r;
 }
@@ -272,6 +309,7 @@ function wireCard(no, autoplay) {
   if (autoplay) setTimeout(() => speak(no), 250);
 }
 function practiceSpeak(target, btn, out, cb) {
+  if (!packLocal && !packAsked && packApi()) { packAsked = true; return packOffer(out, () => practiceSpeak(target, btn, out, cb), true); }
   btn.classList.add("rec"); out.textContent = "Sprich jetzt …";
   let got = false;
   listen(alts => {
@@ -288,7 +326,7 @@ function practiceSpeak(target, btn, out, cb) {
       out.textContent = err === "not-allowed" || err === "service-not-allowed" ? "Mikrofon ist blockiert. Stell in den Browser-Einstellungen für diese Seite Mikrofon auf „Erlauben“ (nicht „Fragen“)." : "Nichts gehört – tippe 🎤 und sprich deutlich.";
       if (cb) cb(null);
     }
-  });
+  }, false, target);
 }
 
 function learnCards(id) {
@@ -755,6 +793,7 @@ function renderMe() {
     <div class="card">
       ${!("speechSynthesis" in window) ? `<div class="notice">Dein Browser kann nicht vorlesen. Nutze Chrome, Edge oder Safari.</div>` : !voice ? `<div class="notice">Keine norwegische Stimme gefunden. Am Handy: Einstellungen → Sprache → Text-in-Sprache → Norwegisch installieren. Am PC klappt es meist in Chrome oder Edge.</div>` : `<p class="muted">Stimme: ${esc(voice.name)}</p>`}
       ${!canListen ? `<div class="notice">Spracherkennung wird hier nicht unterstützt (am besten Chrome auf Android/PC oder Safari auf iPhone). Sprechübungen werden solange übersprungen.</div>` : ""}
+      ${canListen && packApi() ? `<button class="btn ghost" id="pack">📦 Norwegisch-Sprachpaket fürs Mikrofon</button><p class="muted" id="packres" style="font-size:14px"></p>` : ""}
       <label class="set">Sprechtempo <input type="range" min="0.5" max="1.2" step="0.05" value="${S.rate}" id="rate"></label>
       <button class="btn ghost" id="test">🔊 Stimme testen</button></div>
     <h2>Als App installieren</h2>
@@ -764,6 +803,10 @@ function renderMe() {
       <div class="row"><button class="btn ghost" id="exp">Sichern</button><button class="btn ghost" id="imp">Laden</button></div>
       <button class="btn ghost" id="reset" style="color:var(--bad)">Alles zurücksetzen</button></div>`;
   document.getElementById("rate").oninput = e => { S.rate = +e.target.value; save(); };
+  const pk = document.getElementById("pack");
+  if (pk) { const pr = document.getElementById("packres");
+    packStatus().then(st => { pr.textContent = st === "available" ? "✅ Installiert – das Mikrofon erkennt Norwegisch direkt auf dem Gerät." : st === "unavailable" ? "Für Norwegisch bietet dein Gerät (noch) kein Paket an – die Erkennung läuft dann online über Google." : "Noch nicht installiert."; });
+    pk.onclick = () => { packAsked = false; packOffer(pr, () => {}); }; }
   const wk = document.getElementById("weak"); if (wk) wk.onclick = () => practiceWeak(weakSpots()[0]);
   document.querySelectorAll("#goalseg button").forEach(b => b.onclick = () => { S.goal = +b.dataset.g; save(); updateStats(); renderMe(); });
   document.getElementById("rtime").onchange = e => { S.remind = e.target.value; save(); writeMeta(); };
