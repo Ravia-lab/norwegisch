@@ -222,7 +222,7 @@ function openLesson(id) {
   $app.innerHTML = `<div class="qtype">${L.id} · Lektion</div><h1>${esc(les.t)}</h1>
     <div class="coach small">${VIKING.html("happy", 70, VIKING.phrase("start"))}</div>
     <div class="card intro">${les.intro}</div>
-    <div class="card"><b>In dieser Lektion:</b><p class="muted">${les.items.length} Wörter & Wendungen · ${les.sent.length} Beispielsätze${les.gram ? ` · ${les.gram.length} Grammatik-Übungen` : ""}${les.text ? " · ein Lesetext" : ""}${les.write ? " · eine Schreibaufgabe" : ""}</p></div>
+    <div class="card"><b>In dieser Lektion:</b><p class="muted">${les.items.length} Wörter & Wendungen · ${les.sent.length} Beispielsätze${les.gram ? ` · ${les.gram.length} Grammatik-Übungen` : ""}${les.text ? " · ein Hör- & Lesetext" : ""}${les.write ? " · eine Schreibaufgabe" : ""}</p></div>
     <button class="btn" id="learn">🃏 Lernkarten ansehen</button>
     <button class="btn ghost" id="test">Direkt zum Test</button>`;
   document.getElementById("learn").onclick = () => learnCards(id);

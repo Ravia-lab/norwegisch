@@ -225,3 +225,4 @@ a{color:var(--accent);font-weight:700;text-decoration:none}
 .hear-top .muted{flex:1 1 180px;font-size:14px;line-height:1.4}
 .icon.big{width:64px;height:64px;font-size:30px}
 .hear-text{margin-top:12px;padding-top:12px;border-top:1px dashed var(--line,rgba(0,0,0,.15))}
+.tip{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:15px;line-height:1.45}
