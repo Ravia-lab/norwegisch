@@ -317,7 +317,9 @@ function gramQs(les, n) {
 }
 function textQs(les) {
   if (!les.text) return [];
-  return les.text.q.map(q => ({ t: "text", label: "Leseverstehen", text: les.text, prompt: q[0], opts: shuffle([q[1], q[2], q[3]]), ans: q[1] }));
+  // Erst hören (Text verdeckt, wie Radio), dann lesen
+  const nHear = les.text.q.length >= 3 ? 2 : 1;
+  return les.text.q.map((q, i) => ({ t: i < nHear ? "hear" : "text", label: i < nHear ? "Hörverstehen" : "Leseverstehen", text: les.text, prompt: q[0], opts: shuffle([q[1], q[2], q[3]]), ans: q[1] }));
 }
 function lessonQuestions(les, L) {
   const advanced = levelIdx(L.id) >= 2;
@@ -443,22 +445,25 @@ function feedback(ok, q, extra, cont) {
 function renderQ(q, el, answer) {
   let answered = false;
   const once = (...a) => { if (answered) return; answered = true; answer(...a); };
-  if (q.t === "choose" || q.t === "listen" || q.t === "text") {
+  if (q.t === "choose" || q.t === "listen" || q.t === "text" || q.t === "hear") {
     let head = "";
     if (q.t === "listen") head = `<div class="prompt">${esc(q.prompt)}</div><div class="sbtns" style="justify-content:flex-start;margin-bottom:14px"><button class="icon" id="pa">🔊</button><button class="icon" id="ps">🐢</button></div>`;
+    else if (q.t === "hear") head = `<div class="card reading hear"><div class="hear-top"><button class="icon big" id="pa" aria-label="Abspielen">🎧</button><button class="icon" id="ps" aria-label="Langsam">🐢</button><span class="muted">Hör gut zu, wie im Radio. Du kannst so oft abspielen, wie du willst.</span></div><div class="hear-text hidden">${esc(q.text.no)}<p class="muted">${esc(q.text.de)}</p></div></div><div class="prompt">${esc(q.prompt)}</div>`;
     else if (q.t === "text") head = `<div class="card reading">${esc(q.text.no)}<details><summary>Übersetzung anzeigen</summary><p class="muted">${esc(q.text.de)}</p></details><div class="sbtns" style="justify-content:flex-start"><button class="icon" id="pa">🔊</button></div></div><div class="prompt">${esc(q.prompt)}</div>`;
     else head = `<div class="prompt">${esc(q.prompt)}${q.t === "choose" && q.no === q.prompt ? `<div style="font-size:16px;font-weight:400">${sylBlock(q.no, q.pron)}</div>` : ""}</div>${q.no && q.prompt === q.no ? `<div class="sbtns" style="justify-content:flex-start;margin:-6px 0 14px"><button class="icon" id="pa">🔊</button></div>` : ""}`;
     el.innerHTML = head + `<div class="opts">${q.opts.map((o, i) => `<button class="opt" data-i="${i}">${esc(o)}</button>`).join("")}</div>`;
     const pa = el.querySelector("#pa"), ps = el.querySelector("#ps");
-    const audio = q.t === "text" ? q.text.no : q.audio || q.no;
+    const audio = q.t === "text" || q.t === "hear" ? q.text.no : q.audio || q.no;
     if (pa) pa.onclick = () => speak(audio);
     if (ps) ps.onclick = () => speak(audio, true);
     if (q.t === "listen") setTimeout(() => speak(q.audio), 300);
+    if (q.t === "hear") setTimeout(() => speak(q.text.no), 400);
     el.querySelectorAll(".opt").forEach(b => b.onclick = () => {
       if (answered) return;
       const v = q.opts[+b.dataset.i], ok = v === q.ans;
       el.querySelectorAll(".opt").forEach(x => { if (q.opts[+x.dataset.i] === q.ans) x.classList.add("right"); });
       if (!ok) b.classList.add("wrong");
+      const ht = el.querySelector(".hear-text"); if (ht) ht.classList.remove("hidden");
       once(ok);
     });
   } else if (q.t === "write") {
@@ -715,7 +720,7 @@ function renderMe() {
 }
 
 /* ---------- Statistik & Schwächen ---------- */
-const SKILL_TYPE = { "Grammatik": "gram", "Hören": "listen", "Lesen": "read", "Wortschatz": "reverse", "Schreiben": "write", "Diktat": "dict", "Sprechen": "speak", "Betonung": "stress", "Satzbau": "order" };
+const SKILL_TYPE = { "Grammatik": "gram", "Hörverstehen": "hear", "Leseverstehen": "text", "Hören": "listen", "Lesen": "read", "Wortschatz": "reverse", "Schreiben": "write", "Diktat": "dict", "Sprechen": "speak", "Betonung": "stress", "Satzbau": "order" };
 function track(q, ok, extra) {
   const s = S.skill[q.label] || (S.skill[q.label] = [0, 0]);
   s[1]++; if (ok) s[0]++;
@@ -745,7 +750,10 @@ function practiceWeak(spot) {
   if ((type === "write" || type === "dict") ) items = items.filter(x => words(x.it[0]).length <= 4);
   if (type === "speak" && !canListen) type = "listen";
   let qs;
-  if (type === "gram") {
+  if (type === "hear" || type === "text") {
+    const ls = []; LEVELS.forEach((L, i) => L.lessons.forEach((les, j) => { if (lessonOpen(i, j) && les.text) ls.push(les); }));
+    qs = shuffle(ls).slice(0, 3).flatMap(l => textQs(l));
+  } else if (type === "gram") {
     const ls = []; LEVELS.forEach((L, i) => L.lessons.forEach((les, j) => { if (lessonOpen(i, j) && les.gram) ls.push(les); }));
     qs = shuffle(ls.flatMap(l => gramQs(l, 2))).slice(0, 10);
   } else if (type === "order") {
