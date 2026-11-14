@@ -23,7 +23,7 @@ function addDaily(n) {
   if (S.day.d !== today()) S.day = { d: today(), n: 0 };
   const before = S.day.n; S.day.n += n;
   if (before < S.goal && S.day.n >= S.goal) {
-    bumpStreak(); S.xp += 30;
+    bumpStreak(); S.xp += 30; VIKING.confetti();
     toast(`🎯 Tagesziel erreicht! 🔥 ${S.streak.n} ${S.streak.n === 1 ? "Tag" : "Tage"} in Folge (+30 ✦)`);
   }
   save(); writeMeta(); updateStats(); setTimeout(checkBadges, 900);
@@ -170,7 +170,15 @@ function renderHome() {
     <div class="lt"><b>${gp >= 100 ? "Tagesziel geschafft! 🎉" : `Tagesziel: ${tc} von ${S.goal} Aufgaben`}</b>
     <small class="muted">${streakNow() ? `🔥 ${streakNow()} ${streakNow() === 1 ? "Tag" : "Tage"} in Folge – ${gp >= 100 ? "bis morgen!" : "bleib dran!"}` : "Schaffe dein Tagesziel und starte eine Serie 🔥"}</small></div></div>`;
   const warm = due && S.warm !== today() ? `<div class="card warm"><b>☀️ Aufwärmen</b><p class="muted">${Math.min(due, 8)} Karten sind fällig. Kurz wiederholen, dann geht's weiter – so bleibt alles im Kopf.</p><button class="btn" id="warm">Aufwärmen (ca. 2 Min.) ›</button><button class="linkbtn" id="skipwarm">Heute überspringen</button></div>` : "";
-  hero = goalCard + warm + hero;
+  const hr = new Date().getHours(), sn = streakNow();
+  const greet = gp >= 100 ? ["Tagesziel klart! Du er rå!", "Tagesziel geschafft! Du bist stark!"]
+    : sn >= 2 ? [`${sn} dager på rad! Ikke bryt rekka!`, `${sn} Tage am Stück! Halte die Serie!`]
+    : tc > 0 ? ["Godt i gang! Litt til?", "Guter Start! Noch ein bisschen?"]
+    : hr < 11 ? ["God morgen! Klar for norsk?", "Guten Morgen! Bereit für Norwegisch?"]
+    : hr < 18 ? ["Hei! Skal vi lære litt?", "Hallo! Wollen wir ein bisschen lernen?"]
+    : ["God kveld! Fem minutter norsk?", "Guten Abend! Fünf Minuten Norwegisch?"];
+  const coach = `<div class="coach">${VIKING.html(gp >= 100 ? "cheer" : "happy", 92, greet)}</div>`;
+  hero = coach + goalCard + warm + hero;
   const cardsHint = due && !warm ? `<button class="lesson" id="gocards"><span class="dot" style="background:#e3a008">🃏</span><span class="lt"><b>${due} Karten zum Wiederholen</b><small>Kurz üben hält die Wörter im Kopf</small></span>›</button>` : "";
   let html = hero + cardsHint;
   LEVELS.forEach((L, i) => {
@@ -212,6 +220,7 @@ function openLesson(id) {
   setFocus(true);
   S.seen[id] = 1; save();
   $app.innerHTML = `<div class="qtype">${L.id} · Lektion</div><h1>${esc(les.t)}</h1>
+    <div class="coach small">${VIKING.html("happy", 70, VIKING.phrase("start"))}</div>
     <div class="card intro">${les.intro}</div>
     <div class="card"><b>In dieser Lektion:</b><p class="muted">${les.items.length} Wörter & Wendungen · ${les.sent.length} Beispielsätze${les.text ? " · ein Lesetext" : ""}${les.write ? " · eine Schreibaufgabe" : ""}</p></div>
     <button class="btn" id="learn">🃏 Lernkarten ansehen</button>
@@ -389,9 +398,11 @@ function runQuiz(qs, title, finish) {
     inQuiz = false;
     const pct = counted ? Math.round(right / counted * 100) : 0;
     const r = finish(pct);
+    const rph = VIKING.phrase(r.passed ? "pass" : "fail");
     S.xp += right * 10 + (r.passed ? 50 : 0); if (pct === 100 && counted >= 5) S.perfect = (S.perfect || 0) + 1; save(); updateStats(); setTimeout(checkBadges, 600);
     const nx = nextStep();
-    $app.innerHTML = `<div class="center"><div style="font-size:64px">${r.passed ? "🎉" : "💪"}</div>
+    if (r.passed) { VIKING.confetti(); setTimeout(() => speak(rph[0]), 400); }
+    $app.innerHTML = `<div class="center">${VIKING.html(r.passed ? "cheer" : "sad", 130, rph)}
       <div class="score" style="color:${r.passed ? "var(--ok)" : "var(--bad)"}">${pct} %</div>
       <h1>${r.passed ? "Bestanden!" : "Noch nicht ganz"}</h1>
       <p class="muted">${right} von ${counted} richtig · ${PASS} % zum Bestehen</p>
@@ -412,7 +423,9 @@ function feedback(ok, q, extra, cont) {
   const el = document.createElement("div");
   el.className = "feedback" + (ok ? "" : " bad");
   const sol = q.t === "compose" ? "" : `<p>${ok ? "" : "Richtig wäre: "}<b>${esc(q.ans)}</b>${q.no && q.no !== q.ans ? ` <span class="muted">(${esc(q.no)})</span>` : ""}</p>`;
-  el.innerHTML = `<div class="inner"><b>${ok ? "✅ Richtig!" : "❌ Leider falsch"}</b>${extra ? `<p>${extra}</p>` : ""}${ok && !extra ? "" : sol}
+  const ph = VIKING.phrase(ok ? "right" : "wrong");
+  el.innerHTML = `<div class="inner"><div class="fb-head"><button class="viking mini vk-${ok ? "cheer" : "sad"}" data-say="${ph[0]}" style="--s:58px">${VIKING.svg(ok ? "cheer" : "sad")}</button>
+    <div><b>${ok ? "✅ " : ""}${ph[0]}</b><div class="muted" style="font-size:13px">${ph[1]}${ok ? "" : " – das war leider falsch."}</div></div></div>${extra ? `<p>${extra}</p>` : ""}${ok && !extra ? "" : sol}
     <div class="row">${q.no ? `<button class="btn ghost" id="fs" style="flex:0 0 64px">🔊</button>` : ""}<button class="btn ${ok ? "ok" : "red"}" id="fc">Weiter</button></div></div>`;
   document.body.appendChild(el);
   if (q.no) { document.getElementById("fs").onclick = () => speak(q.no); if (!ok || q.t === "write") speak(q.no); }
@@ -755,7 +768,7 @@ function toast(html) { toastQ.push(html); if (!toasting) nextToast(); }
 function nextToast() {
   const html = toastQ.shift(); if (!html) { toasting = false; return; }
   toasting = true;
-  const t = document.createElement("div"); t.className = "toast"; t.innerHTML = html;
+  const t = document.createElement("div"); t.className = "toast"; t.innerHTML = `<span class="tv">${VIKING.svg("cheer")}</span><span>${html}</span>`;
   document.body.appendChild(t); setTimeout(() => t.classList.add("out"), 2300); setTimeout(() => { t.remove(); nextToast(); }, 2700);
 }
 
@@ -786,7 +799,8 @@ function playDialog(d, hard) {
       const first = !S.dialogs[d.id];
       S.dialogs[d.id] = Math.max(S.dialogs[d.id] || 0, hard ? 2 : 1); S.xp += first ? 20 : 5; save();
       addDaily(d.lines.filter(l => l[0] === "B").length);
-      ctl.innerHTML = `<div class="center"><div style="font-size:48px">🎉</div><h2>Gespräch geschafft!</h2></div>
+      VIKING.confetti();
+      ctl.innerHTML = `<div class="center">${VIKING.html("cheer", 110, ["Bra snakka!", "Gut gesprochen!"])}<h2>Gespräch geschafft!</h2></div>
         ${!hard ? `<button class="btn red" id="hard">Nochmal ohne Text (Profi)</button>` : ""}<button class="btn ghost" id="back">Zu den Dialogen</button>`;
       const h = document.getElementById("hard"); if (h) h.onclick = () => playDialog(d, true);
       document.getElementById("back").onclick = () => goTab("dialogs");
@@ -841,6 +855,12 @@ async function enableNotify(out) {
     writeMeta();
   } catch (e) { out.textContent = "Hintergrund-Erinnerung geht nur in der installierten App (Android/Chrome). Die Kalender-Erinnerung klappt überall."; }
 }
+
+document.addEventListener("click", e => {
+  const v = e.target.closest(".viking"); if (!v) return;
+  e.stopPropagation(); v.classList.remove("jump"); void v.offsetWidth; v.classList.add("jump");
+  speak(v.dataset.say || "Hei!");
+});
 
 /* ---------- PWA ---------- */
 let deferredPrompt = null;

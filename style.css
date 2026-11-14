@@ -10,7 +10,7 @@
 :root[data-theme="dark"]{ --bg:#0f1320; --card:#1a1f30; --text:#eef0f6; --muted:#9aa2b5; --line:#2a3046;
     --okbg:#163626; --badbg:#3a1b1d; --accent:#7ea2ff; --lock:#4a5168; --shadow:none; --nbg:#3a3115; --nfg:#f3e2a6; color-scheme:dark; }
 *{box-sizing:border-box}
-html,body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 Nunito,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-tap-highlight-color:transparent}
 body{min-height:100vh;padding-bottom:calc(72px + env(safe-area-inset-bottom))}
 button{font:inherit;color:inherit;cursor:pointer}
 .hidden{display:none!important}
@@ -173,3 +173,46 @@ label.set{display:flex;justify-content:space-between;align-items:center;gap:10px
 @keyframes drop{from{transform:translate(-50%,-20px);opacity:0}}
 @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
 .stats{gap:8px;font-size:14px}
+
+/* ---------- Bjørn der Wikinger & mehr Farbe ---------- */
+body{background:var(--bg) radial-gradient(circle at 15% 0%,rgba(36,87,214,.08),transparent 40%) fixed}
+h1,h2,.brand,.btn,.score{font-weight:900;letter-spacing:-.01em}
+.viking{--s:96px;width:var(--s);height:calc(var(--s)*1.17);border:0;background:none;padding:0;flex:none;cursor:pointer;animation:vk-bob 3s ease-in-out infinite;transform-origin:50% 100%}
+.viking svg{width:100%;height:100%;display:block;overflow:visible}
+.viking.vk-cheer{animation:vk-hop .9s ease-in-out infinite}
+.viking.vk-sad{animation:vk-bob 4s ease-in-out infinite}
+.viking.jump{animation:vk-jump .5s ease}
+.vk-line{stroke:#1d2433;stroke-width:3;stroke-linecap:round;fill:none}
+.vk-wave{animation:vk-wave 1.2s ease-in-out infinite}
+@keyframes vk-bob{50%{transform:translateY(-3px) rotate(-1deg)}}
+@keyframes vk-hop{0%,100%{transform:translateY(0) scale(1,1)}40%{transform:translateY(-10px) scale(.97,1.03)}80%{transform:translateY(0) scale(1.04,.96)}}
+@keyframes vk-jump{40%{transform:translateY(-18px) rotate(-6deg)}}
+@keyframes vk-wave{50%{transform:rotate(-14deg)}}
+.vk-wrap{display:flex;align-items:center;gap:10px}
+.center .vk-wrap{justify-content:center;flex-direction:column;gap:4px}
+.vk-bubble{position:relative;background:var(--card);border:2px solid var(--line);border-radius:18px;padding:10px 14px;box-shadow:var(--shadow);text-align:left;min-width:0}
+.vk-bubble b{display:block;font-size:17px}
+.vk-bubble small{color:var(--muted)}
+.vk-bubble::before{content:"";position:absolute;left:-9px;top:50%;width:14px;height:14px;background:var(--card);border-left:2px solid var(--line);border-bottom:2px solid var(--line);transform:translateY(-50%) rotate(45deg)}
+.center .vk-bubble{text-align:center}
+.center .vk-bubble::before{left:50%;top:-9px;transform:translateX(-50%) rotate(135deg)}
+.coach{margin:2px 0 12px}
+.coach.small .vk-bubble b{font-size:15px}
+.fb-head{display:flex;align-items:center;gap:10px}
+.fb-head .viking{animation-iteration-count:2}
+.toast{display:flex;align-items:center;gap:10px;text-align:left}
+.toast .tv{width:36px;height:42px;flex:none}
+.toast .tv svg{width:100%;height:100%}
+.hero{position:relative;overflow:hidden;background:linear-gradient(160deg,#0b2a6b 0%,#2457d6 60%,#5b8cff 100%)}
+.hero::after{content:"";position:absolute;left:0;right:0;bottom:-2px;height:70px;opacity:.28;pointer-events:none;background:no-repeat bottom/100% 100% url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 70' preserveAspectRatio='none'%3E%3Cpath d='M0 70 L0 45 L40 20 L70 38 L110 8 L150 40 L190 22 L230 44 L270 12 L310 36 L350 18 L400 40 L400 70Z' fill='white'/%3E%3C/svg%3E")}
+.hero>*{position:relative;z-index:1}
+.lesson{transition:transform .12s}
+.lesson:active,.btn:active{transform:scale(.98)}
+.lesson.done .dot{box-shadow:0 0 0 3px var(--okbg)}
+.btn{box-shadow:0 3px 0 rgba(0,0,0,.18)}
+.btn.ghost{box-shadow:none}
+.confetti{position:fixed;inset:0;pointer-events:none;z-index:60;overflow:hidden}
+.confetti i{position:absolute;top:-12px;width:9px;height:14px;border-radius:2px;animation:fall linear forwards}
+@keyframes fall{to{transform:translateY(105vh) rotate(var(--r));opacity:.9}}
+@media (prefers-reduced-motion: reduce){.viking,.vk-wave{animation:none!important}}
+a{color:var(--accent);font-weight:700;text-decoration:none}
