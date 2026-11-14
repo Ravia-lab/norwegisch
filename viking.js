@@ -3,39 +3,60 @@
 "use strict";
 function svg(mood) {
   const cheer = mood === "cheer", sad = mood === "sad", wave = mood === "happy" || mood === "wave";
+  const O = 'stroke="#2b1a10" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"';
+  // Riesenaugen
   const eyes = cheer
-    ? `<path d="M44 61 Q49 55 54 61" class="vk-line"/><path d="M66 61 Q71 55 76 61" class="vk-line"/>`
-    : `<circle cx="49" cy="60" r="4.2" fill="#1d2433"/><circle cx="71" cy="60" r="4.2" fill="#1d2433"/><circle cx="50.4" cy="58.6" r="1.4" fill="#fff"/><circle cx="72.4" cy="58.6" r="1.4" fill="#fff"/>`;
-  const brows = sad ? `<path d="M43 51 L54 54" class="vk-line"/><path d="M77 51 L66 54" class="vk-line"/>` : "";
+    ? `<path d="M38 60 Q47 49 56 60" ${O} fill="none" stroke-width="4"/><path d="M64 60 Q73 49 82 60" ${O} fill="none" stroke-width="4"/>`
+    : `<ellipse cx="47" cy="57" rx="10" ry="12" fill="#fff" ${O}/><ellipse cx="73" cy="57" rx="10" ry="12" fill="#fff" ${O}/>
+       <circle cx="${sad ? 46 : 49}" cy="${sad ? 61 : 58}" r="6" fill="#2b1a10"/><circle cx="${sad ? 72 : 75}" cy="${sad ? 61 : 58}" r="6" fill="#2b1a10"/>
+       <circle cx="${sad ? 48 : 51}" cy="${sad ? 58 : 55}" r="2.4" fill="#fff"/><circle cx="${sad ? 74 : 77}" cy="${sad ? 58 : 55}" r="2.4" fill="#fff"/>
+       <circle cx="${sad ? 44 : 47}" cy="${sad ? 63 : 61}" r="1.1" fill="#fff"/><circle cx="${sad ? 70 : 73}" cy="${sad ? 63 : 61}" r="1.1" fill="#fff"/>`;
+  const brows = sad
+    ? `<path d="M36 44 Q44 38 54 44" fill="none" stroke="#c4501a" stroke-width="5" stroke-linecap="round" transform="rotate(14 45 42)"/><path d="M66 44 Q76 38 84 44" fill="none" stroke="#c4501a" stroke-width="5" stroke-linecap="round" transform="rotate(-14 75 42)"/>`
+    : `<path d="M36 42 Q45 34 55 41" fill="none" stroke="#c4501a" stroke-width="5" stroke-linecap="round"/><path d="M65 41 Q75 34 84 42" fill="none" stroke="#c4501a" stroke-width="5" stroke-linecap="round"/>`;
   const mouth = sad
-    ? `<path d="M53 88 Q60 84 67 88" class="vk-line"/>`
-    : cheer ? `<path d="M50 84 Q60 98 70 84 Z" fill="#a8323e"/><path d="M54 90 Q60 94 66 90" fill="#f08a96"/>`
-    : `<path d="M52 85 Q60 93 68 85 Z" fill="#a8323e"/>`;
-  // Arme: links/rechts, angehoben beim Jubeln, rechts winkt
-  const armL = cheer ? `rotate(-140 36 96)` : `rotate(18 36 96)`;
-  const armR = cheer ? `rotate(140 84 96)` : wave ? `rotate(-130 84 96)` : `rotate(-18 84 96)`;
-  return `<svg viewBox="0 0 120 140" aria-hidden="true">
-  <ellipse cx="60" cy="134" rx="30" ry="4" fill="rgba(0,0,0,.12)"/>
-  <g transform="${armL}"><rect x="30" y="94" width="12" height="28" rx="6" fill="#2457d6"/><circle cx="36" cy="124" r="6.5" fill="#ffd7b5"/></g>
-  <g class="${wave && !cheer ? "vk-wave" : ""}" style="transform-origin:84px 96px"><g transform="${armR}"><rect x="78" y="94" width="12" height="28" rx="6" fill="#2457d6"/><circle cx="84" cy="124" r="6.5" fill="#ffd7b5"/>
-    ${cheer ? `<g transform="translate(80 120) rotate(180)"><rect x="-1" y="0" width="2" height="24" fill="#8a5a2b"/><rect x="1" y="0" width="16" height="11" fill="#ba0c2f"/><rect x="5" y="0" width="3" height="11" fill="#fff"/><rect x="1" y="4" width="16" height="3" fill="#fff"/><rect x="5.8" y="0" width="1.4" height="11" fill="#00205b"/><rect x="1" y="4.8" width="16" height="1.4" fill="#00205b"/></g>` : ""}</g></g>
-  <path d="M36 92 Q60 84 84 92 L88 128 Q60 136 32 128 Z" fill="#2457d6"/>
-  <rect x="34" y="114" width="52" height="6" rx="3" fill="#7a4a24"/><rect x="56" y="113" width="8" height="8" rx="2" fill="#e8b84a"/>
-  <circle cx="60" cy="62" r="30" fill="#ffd7b5"/>
-  <path d="M29 60 Q28 104 60 110 Q92 104 91 60 Q84 80 60 80 Q36 80 29 60 Z" fill="#e8772e"/>
-  <path d="M60 110 Q54 118 58 124 M60 110 Q66 118 62 124" stroke="#e8772e" stroke-width="5" stroke-linecap="round" fill="none"/>
-  <ellipse cx="52" cy="78" rx="9" ry="4.5" fill="#d0611c"/><ellipse cx="68" cy="78" rx="9" ry="4.5" fill="#d0611c"/>
+    ? `<path d="M50 90 Q55 85 60 89 Q65 85 70 90" fill="none" ${O}/>`
+    : cheer
+    ? `<path d="M40 82 Q60 112 80 82 Q60 90 40 82 Z" fill="#7a1f2b" ${O}/><path d="M44 84 Q60 89 76 84 L74 88 Q60 92 46 88 Z" fill="#fff"/><path d="M50 99 Q60 92 70 99 Q60 106 50 99Z" fill="#ff7a8a"/>`
+    : `<path d="M44 83 Q60 104 76 83 Q60 89 44 83 Z" fill="#7a1f2b" ${O}/><path d="M47 84.5 Q60 88 73 84.5 L72 87.5 Q60 90 48 87.5 Z" fill="#fff"/><path d="M53 95 Q60 90 67 95 Q60 99 53 95Z" fill="#ff7a8a"/>`;
+  const armL = cheer ? `rotate(-145 40 104)` : `rotate(25 40 104)`;
+  const armR = cheer ? `rotate(145 80 104)` : wave ? `rotate(-135 80 104)` : `rotate(-25 80 104)`;
+  const flag = cheer ? `<g transform="translate(76 124) rotate(180)"><rect x="-1.5" y="-2" width="3" height="26" fill="#8a5a2b" ${O} stroke-width="2"/><g transform="translate(1.5 0)"><rect width="20" height="14" fill="#ba0c2f" ${O} stroke-width="2"/><rect x="5" width="4" height="14" fill="#fff"/><rect y="5" width="20" height="4" fill="#fff"/><rect x="6" width="2" height="14" fill="#00205b"/><rect y="6" width="20" height="2" fill="#00205b"/></g></g>` : "";
+  return `<svg viewBox="0 -4 120 146" aria-hidden="true">
+  <ellipse cx="60" cy="138" rx="28" ry="4" fill="rgba(0,0,0,.15)"/>
+  <!-- Arme -->
+  <g transform="${armL}"><rect x="34" y="100" width="13" height="24" rx="6.5" fill="#3a6df0" ${O}/><circle cx="40.5" cy="126" r="7" fill="#ffcfa6" ${O}/></g>
+  <g class="${wave && !cheer ? "vk-wave" : ""}" style="transform-origin:80px 104px"><g transform="${armR}"><rect x="73" y="100" width="13" height="24" rx="6.5" fill="#3a6df0" ${O}/><circle cx="79.5" cy="126" r="7" fill="#ffcfa6" ${O}/>${flag}</g></g>
+  <!-- Körper -->
+  <path d="M38 102 Q60 92 82 102 L86 130 Q60 138 34 130 Z" fill="#3a6df0" ${O}/>
+  <path d="M36 120 L84 120" stroke="#6b3d1c" stroke-width="7"/><rect x="54" y="115" width="12" height="10" rx="3" fill="#ffc83d" ${O} stroke-width="2"/>
+  <ellipse cx="47" cy="133" rx="9" ry="5" fill="#6b3d1c" ${O} stroke-width="2.5"/><ellipse cx="73" cy="133" rx="9" ry="5" fill="#6b3d1c" ${O} stroke-width="2.5"/>
+  <!-- Hörner -->
+  <path d="M27 40 Q4 34 6 2 Q16 24 34 28 Z" fill="#fff4dc" ${O}/><path d="M9 14 L16 17 M12 23 L20 25" stroke="#e4d2a8" stroke-width="2"/>
+  <path d="M93 40 Q116 34 114 2 Q104 24 86 28 Z" fill="#fff4dc" ${O}/><path d="M111 14 L104 17 M108 23 L100 25" stroke="#e4d2a8" stroke-width="2"/>
+  <!-- Kopf -->
+  <circle cx="60" cy="58" r="35" fill="#ffcfa6" ${O}/>
+  <ellipse cx="25" cy="62" rx="5" ry="7" fill="#ffcfa6" ${O}/><ellipse cx="95" cy="62" rx="5" ry="7" fill="#ffcfa6" ${O}/>
+  <!-- Bart mit Zöpfen -->
+  <path d="M24 62 Q22 104 46 112 Q60 120 74 112 Q98 104 96 62 Q90 80 78 80 Q60 76 42 80 Q30 80 24 62 Z" fill="#f2862e" ${O}/>
+  <path d="M34 92 Q38 100 36 106 M86 92 Q82 100 84 106 M48 104 Q50 110 48 114 M72 104 Q70 110 72 114" stroke="#d0611c" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <path d="M50 113 Q46 122 50 128 M70 113 Q74 122 70 128" stroke="#f2862e" stroke-width="7" stroke-linecap="round" fill="none"/>
+  <circle cx="50" cy="129" r="4" fill="#ffc83d" ${O} stroke-width="2"/><circle cx="70" cy="129" r="4" fill="#ffc83d" ${O} stroke-width="2"/>
   ${mouth}
-  <circle cx="40" cy="70" r="5" fill="#ff9aa2" opacity=".55"/><circle cx="80" cy="70" r="5" fill="#ff9aa2" opacity=".55"/>
+  <!-- Schnurrbart -->
+  <path d="M60 76 Q48 70 36 80 Q44 86 60 80 Q76 86 84 80 Q72 70 60 76 Z" fill="#e0701f" ${O}/>
+  <circle cx="34" cy="70" r="6" fill="#ff8f9c" opacity=".55"/><circle cx="86" cy="70" r="6" fill="#ff8f9c" opacity=".55"/>
+  <circle cx="31" cy="66" r="1" fill="#d98b62"/><circle cx="35" cy="67" r="1" fill="#d98b62"/><circle cx="89" cy="66" r="1" fill="#d98b62"/><circle cx="85" cy="67" r="1" fill="#d98b62"/>
   ${eyes}${brows}
-  <circle cx="60" cy="69" r="4" fill="#f4b48d"/>
-  <path d="M32 46 Q14 40 13 15 Q24 33 39 37 Z" fill="#f4ecd8" stroke="#d9cba8" stroke-width="1.5"/>
-  <path d="M88 46 Q106 40 107 15 Q96 33 81 37 Z" fill="#f4ecd8" stroke="#d9cba8" stroke-width="1.5"/>
-  <path d="M28 52 Q30 20 60 18 Q90 20 92 52 Z" fill="#9aa7b8"/>
-  <path d="M40 30 Q50 22 60 22" stroke="#c9d2de" stroke-width="3" stroke-linecap="round" fill="none"/>
-  <rect x="26" y="46" width="68" height="9" rx="4.5" fill="#7b8798"/>
-  <rect x="57" y="20" width="6" height="35" fill="#7b8798"/>
-  <circle cx="36" cy="50.5" r="1.8" fill="#c9d2de"/><circle cx="48" cy="50.5" r="1.8" fill="#c9d2de"/><circle cx="72" cy="50.5" r="1.8" fill="#c9d2de"/><circle cx="84" cy="50.5" r="1.8" fill="#c9d2de"/>
+  <ellipse cx="60" cy="70" rx="7" ry="6" fill="#ffad85" ${O}/><circle cx="58" cy="68" r="1.8" fill="#fff" opacity=".8"/>
+  <!-- Helm -->
+  <path d="M24 44 Q24 8 60 6 Q96 8 96 44 Z" fill="#a9b6c7" ${O}/>
+  <path d="M38 22 Q48 12 60 12" stroke="#e3e9f1" stroke-width="4" stroke-linecap="round" fill="none"/>
+  <rect x="21" y="38" width="78" height="11" rx="5.5" fill="#7d8aa0" ${O}/>
+  <path d="M56 8 L64 8 L63 50 L57 50 Z" fill="#7d8aa0" ${O} stroke-width="2.5"/>
+  <circle cx="31" cy="43.5" r="2" fill="#e3e9f1"/><circle cx="44" cy="43.5" r="2" fill="#e3e9f1"/><circle cx="76" cy="43.5" r="2" fill="#e3e9f1"/><circle cx="89" cy="43.5" r="2" fill="#e3e9f1"/>
+  ${sad ? `<path d="M100 30 Q104 38 100 42 Q96 38 100 30Z" fill="#7ec8ff" ${O} stroke-width="2"/>` : ""}
+  ${cheer ? `<path d="M10 52 L4 48 M12 62 L4 63 M110 52 L116 48 M108 62 L116 63" stroke="#ffc83d" stroke-width="3" stroke-linecap="round"/>` : ""}
 </svg>`;
 }
 const PH = {
