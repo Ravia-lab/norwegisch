@@ -86,14 +86,38 @@ function speak(text, slow) {
 }
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 const canListen = !!SR;
-function listen(onResult, onEnd) {
+let srLang = "nb-NO";
+function listen(onResult, onEnd, retry) {
   const r = new SR();
-  r.lang = "nb-NO"; r.interimResults = false; r.maxAlternatives = 5;
-  r.onresult = e => { const alts = []; for (const a of e.results[0]) alts.push(a.transcript); onResult(alts); };
-  r.onerror = e => onEnd(e.error);
-  r.onend = () => onEnd();
+  r.lang = srLang; r.interimResults = false; r.maxAlternatives = 10; r.continuous = false;
+  let got = false, again = false;
+  r.onresult = e => { got = true; const alts = []; for (const res of e.results) for (const a of res) alts.push(a.transcript); onResult(alts); };
+  r.onerror = e => {
+    if (e.error === "language-not-supported" && srLang !== "no-NO") { srLang = "no-NO"; again = true; return; }
+    if (e.error === "no-speech" && !retry) { again = true; return; }
+    onEnd(e.error);
+  };
+  r.onend = () => { if (again && !got) listen(onResult, onEnd, true); else onEnd(); };
   try { r.start(); } catch (e) { onEnd("start"); }
   return r;
+}
+/* Aussprache-Bewertung: tolerant gegenüber Artikeln, Zahlen, æøå-Schreibweisen und einzelnen Wörtern */
+const NUMW = ["null","en","to","tre","fire","fem","seks","sju","åtte","ni","ti","elleve","tolv","tretten","fjorten","femten","seksten","sytten","atten","nitten","tjue"];
+const spk = s => {
+  let t = norm(String(s).replace(/\(.*?\)/g, " ")).replace(/\b(\d{1,2})\b/g, (m, d) => NUMW[+d] || m);
+  t = t.replace(/aa/g, "å").replace(/oe/g, "ø").replace(/ae/g, "æ").replace(/[éè]/g, "e");
+  t = t.replace(/^(å|en|ei|et|ein|eit) /, "");
+  return t.replace(/ +/g, " ").trim();
+};
+function speakScore(alt, target) {
+  const a = spk(alt), t = spk(target);
+  if (!a || !t) return 0;
+  if (a === t || (" " + a + " ").includes(" " + t + " ")) return 1;
+  const l = Math.max(a.length, t.length);
+  const whole = 1 - lev(a, t) / l;
+  const tw = t.split(" "), aw = a.split(" ");
+  const hit = tw.reduce((n, w) => n + Math.max(0, ...aw.map(x => 1 - lev(x, w) / Math.max(x.length, w.length))), 0) / tw.length;
+  return Math.max(whole, hit * (tw.length > 1 ? 0.97 : 0.9));
 }
 
 /* ---------- Freischaltung ---------- */
@@ -252,15 +276,16 @@ function practiceSpeak(target, btn, out, cb) {
   let got = false;
   listen(alts => {
     got = true;
-    const best = Math.max(...alts.map(a => sim(a, target)));
-    const heard = alts.reduce((x, a) => sim(a, target) > sim(x, target) ? a : x, alts[0]);
-    const ok = best >= 0.7;
-    out.innerHTML = ok ? `✅ Sehr gut! (${Math.round(best * 100)} %)` : `🔁 Verstanden: „${esc(heard)}“ – versuch es nochmal (${Math.round(best * 100)} %)`;
+    const sc = alts.map(a => speakScore(a, target));
+    const best = Math.max(...sc);
+    const heard = alts[sc.indexOf(best)] || alts[0];
+    const ok = best >= 0.62;
+    out.innerHTML = ok ? `✅ Sehr gut! (${Math.round(best * 100)} %)` : `🔁 Verstanden: „${esc(heard)}“ – versuch es nochmal (${Math.round(best * 100)} %)<br><small class="muted">Tipp: erst nach dem Antippen sprechen, Handy nah an den Mund, ruhig und deutlich.</small>`;
     if (cb) cb(ok, best);
   }, err => {
     btn.classList.remove("rec");
     if (!got) {
-      out.textContent = err === "not-allowed" || err === "service-not-allowed" ? "Mikrofon ist blockiert. Erlaube den Zugriff in den Browser-Einstellungen." : "Nichts gehört – tippe 🎤 und sprich deutlich.";
+      out.textContent = err === "not-allowed" || err === "service-not-allowed" ? "Mikrofon ist blockiert. Stell in den Browser-Einstellungen für diese Seite Mikrofon auf „Erlauben“ (nicht „Fragen“)." : "Nichts gehört – tippe 🎤 und sprich deutlich.";
       if (cb) cb(null);
     }
   });
