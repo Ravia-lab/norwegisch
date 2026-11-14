@@ -216,3 +216,8 @@ h1,h2,.brand,.btn,.score{font-weight:900;letter-spacing:-.01em}
 @keyframes fall{to{transform:translateY(105vh) rotate(var(--r));opacity:.9}}
 @media (prefers-reduced-motion: reduce){.viking,.vk-wave{animation:none!important}}
 a{color:var(--accent);font-weight:700;text-decoration:none}
+
+.gapline{font-size:21px;font-weight:700;line-height:1.6}
+.gap{display:inline-block;min-width:70px;margin:0 4px;padding:0 10px;border-bottom:3px dashed var(--accent);text-align:center;color:var(--accent)}
+.gap.ok{border-color:var(--ok);color:var(--ok);border-bottom-style:solid}
+.gap.bad{border-color:var(--bad);color:var(--bad)}

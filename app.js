@@ -222,7 +222,7 @@ function openLesson(id) {
   $app.innerHTML = `<div class="qtype">${L.id} · Lektion</div><h1>${esc(les.t)}</h1>
     <div class="coach small">${VIKING.html("happy", 70, VIKING.phrase("start"))}</div>
     <div class="card intro">${les.intro}</div>
-    <div class="card"><b>In dieser Lektion:</b><p class="muted">${les.items.length} Wörter & Wendungen · ${les.sent.length} Beispielsätze${les.text ? " · ein Lesetext" : ""}${les.write ? " · eine Schreibaufgabe" : ""}</p></div>
+    <div class="card"><b>In dieser Lektion:</b><p class="muted">${les.items.length} Wörter & Wendungen · ${les.sent.length} Beispielsätze${les.gram ? ` · ${les.gram.length} Grammatik-Übungen` : ""}${les.text ? " · ein Lesetext" : ""}${les.write ? " · eine Schreibaufgabe" : ""}</p></div>
     <button class="btn" id="learn">🃏 Lernkarten ansehen</button>
     <button class="btn ghost" id="test">Direkt zum Test</button>`;
   document.getElementById("learn").onclick = () => learnCards(id);
@@ -311,6 +311,10 @@ function sentQ(s, type, lid) {
 }
 const stressable = it => !/\s/.test(it[0].trim()) && SYLL.analyze(it[0], "no")[0].syl.length > 1;
 function stressQs(items, L, lid, n) { return pick(items.filter(stressable), n).map(it => itemQ(it, "stress", L, lid)); }
+function gramQs(les, n) {
+  if (!les.gram) return [];
+  return pick(les.gram, n).map(g => ({ t: "gram", label: "Grammatik", prompt: g[0], opts: shuffle([g[1], g[2], g[3]]), ans: g[1], hint: g[4], no: g[0].replace("___", g[1]) }));
+}
 function textQs(les) {
   if (!les.text) return [];
   return les.text.q.map(q => ({ t: "text", label: "Leseverstehen", text: les.text, prompt: q[0], opts: shuffle([q[1], q[2], q[3]]), ans: q[1] }));
@@ -330,6 +334,7 @@ function lessonQuestions(les, L) {
   ss.forEach((s, i) => qs.push(sentQ(s, st[i], les.id)));
   const rest = les.items.filter(it => !items.includes(it) && stressable(it));
   stressQs(rest.length ? rest : les.items, L, les.id, levelIdx(L.id) === 0 ? 2 : 1).forEach(q => qs.push(q));
+  gramQs(les, 3).forEach(q => qs.push(q));
   let all = shuffle(qs);
   all = all.concat(textQs(les));
   if (les.write) all.push({ t: "compose", label: "Freies Schreiben", prompt: les.write.task, need: les.write.need, min: les.write.min });
@@ -350,6 +355,8 @@ function examQuestions(L) {
   sents.slice(0, 4).forEach((x, i) => qs.push(sentQ(x.s, i % 2 ? "dict" : "order", x.les.id)));
   const st = items.slice(EXAM_SIZE - 4).find(x => stressable(x.it));
   if (st) { qs.pop(); qs.push(itemQ(st.it, "stress", L, st.les.id)); }
+  const gl = shuffle(L.lessons.filter(l => l.gram));
+  gl.slice(0, 3).forEach(l => { qs.splice(qs.length - 1, 1); qs.push(...gramQs(l, 1)); });
   let out = shuffle(qs);
   if (texts.length) out = out.concat(textQs(texts[0]));
   return out.slice(0, EXAM_SIZE);
@@ -510,6 +517,19 @@ function renderQ(q, el, answer) {
       else if (tries >= 3) setTimeout(() => once(false, false, "Drei Versuche – hör dir das Wort nochmal genau an."), 900);
     });
     el.querySelector("#skip").onclick = () => once(false, true);
+  } else if (q.t === "gram") {
+    const parts = q.prompt.split("___");
+    el.innerHTML = `<div class="prompt">Welches Wort passt?</div>
+      <div class="card gapline">${esc(parts[0])}<span class="gap">?</span>${esc(parts[1] || "")}</div>
+      <div class="opts">${q.opts.map((o, i) => `<button class="opt" data-i="${i}">${esc(o)}</button>`).join("")}</div>`;
+    el.querySelectorAll(".opt").forEach(b => b.onclick = () => {
+      if (answered) return;
+      const v = q.opts[+b.dataset.i], ok = v === q.ans;
+      el.querySelector(".gap").textContent = q.ans; el.querySelector(".gap").classList.add(ok ? "ok" : "bad");
+      el.querySelectorAll(".opt").forEach(x => { if (q.opts[+x.dataset.i] === q.ans) x.classList.add("right"); });
+      if (!ok) b.classList.add("wrong");
+      once(ok, false, q.hint ? `💡 ${esc(q.hint)}` : "");
+    });
   } else if (q.t === "stress") {
     el.innerHTML = `<div class="prompt">${esc(q.prompt)}</div>
       <div class="card center"><div class="big">${esc(q.word)}</div><p class="muted">${esc(q.de)}</p>
@@ -695,7 +715,7 @@ function renderMe() {
 }
 
 /* ---------- Statistik & Schwächen ---------- */
-const SKILL_TYPE = { "Hören": "listen", "Lesen": "read", "Wortschatz": "reverse", "Schreiben": "write", "Diktat": "dict", "Sprechen": "speak", "Betonung": "stress", "Satzbau": "order" };
+const SKILL_TYPE = { "Grammatik": "gram", "Hören": "listen", "Lesen": "read", "Wortschatz": "reverse", "Schreiben": "write", "Diktat": "dict", "Sprechen": "speak", "Betonung": "stress", "Satzbau": "order" };
 function track(q, ok, extra) {
   const s = S.skill[q.label] || (S.skill[q.label] = [0, 0]);
   s[1]++; if (ok) s[0]++;
@@ -725,7 +745,10 @@ function practiceWeak(spot) {
   if ((type === "write" || type === "dict") ) items = items.filter(x => words(x.it[0]).length <= 4);
   if (type === "speak" && !canListen) type = "listen";
   let qs;
-  if (type === "order") {
+  if (type === "gram") {
+    const ls = []; LEVELS.forEach((L, i) => L.lessons.forEach((les, j) => { if (lessonOpen(i, j) && les.gram) ls.push(les); }));
+    qs = shuffle(ls.flatMap(l => gramQs(l, 2))).slice(0, 10);
+  } else if (type === "order") {
     const sents = [];
     LEVELS.forEach((L, i) => L.lessons.forEach((les, j) => { if (lessonOpen(i, j) && S.seen[les.id]) les.sent.forEach(s => sents.push({ s, les })); }));
     qs = pick(sents, 8).map(x => sentQ(x.s, "order", x.les.id));
