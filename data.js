@@ -9,7 +9,7 @@ window.LEVELS = [
   lessons: [
   {
     id: "a1-0", t: "Aussprache & erste Wörter",
-    intro: "<p>Norwegisch klingt oft fast wie geschrieben. Drei Buchstaben sind neu:</p><ul><li><b>æ</b> wie <i>ä</i> in „Bär“</li><li><b>ø</b> wie <i>ö</i> in „schön“</li><li><b>å</b> wie offenes <i>o</i> in „Sonne“</li></ul><p><b>y</b> spricht man wie <i>ü</i>, <b>u</b> liegt zwischen <i>u</i> und <i>ü</i>. <b>kj</b> klingt wie <i>ch</i> in „ich“, <b>skj/sj</b> wie <i>sch</i>.</p><p>Tippe auf 🔊, um jedes Wort zu hören. 🐢 spielt es langsam ab.</p>",
+    intro: "<p>Norwegisch klingt oft fast wie geschrieben. Drei Buchstaben sind neu:</p><ul><li><b>æ</b> wie <i>ä</i> in „Bär“</li><li><b>ø</b> wie <i>ö</i> in „schön“</li><li><b>å</b> wie offenes <i>o</i> in „Sonne“</li></ul><p><b>y</b> spricht man wie <i>ü</i>, <b>u</b> liegt zwischen <i>u</i> und <i>ü</i>. <b>kj</b> klingt wie <i>ch</i> in „ich“, <b>skj/sj</b> wie <i>sch</i>.</p><p><b>Silben & Betonung:</b> Unter jedem Wort siehst du die Silben, z. B. <b>ˈkjø·re</b>. Die <b style=\"color:var(--red)\">rote</b> Silbe mit ˈ wird betont – im Norwegischen fast immer die erste. Darunter steht die Aussprache in deutscher Lautschrift, ebenfalls in Silben.</p><p>Tippe auf 🔊, um jedes Wort zu hören. 🐢 spielt es langsam ab.</p>",
     items: [
       ["hei", "hallo", "hai"],
       ["ja", "ja", "ja"],
@@ -920,6 +920,12 @@ window.SOUNDS = [
     ["g + i/y", "wie „j“", "gi"], ["hv / hj", "h ist stumm", "hva"],
     ["rs", "wie „sch“", "norsk"], ["rt / rd / rn", "weiche, „zurückgerollte“ Laute", "kort"],
     ["-d am Ende", "oft stumm", "god"], ["-et (bestimmt)", "t ist stumm", "huset"]
+  ]},
+  { h: "Silben & Betonung", list: [
+    ["ˈkjø·re", "betont wird meist die 1. Silbe", "kjøre"],
+    ["bu·ˈtikk", "Fremdwörter: oft hinten betont", "butikk"],
+    ["for·ˈstår", "Vorsilben be-/for- sind oft unbetont", "forstår"],
+    ["stu·ˈde·re", "Verben auf -ere: Betonung auf -e-", "studere"]
   ]},
   { h: "Tonfall (Tonem)", list: [
     ["Ton 1", "einfacher Ton: bønder (Bauern)", "bønder"],

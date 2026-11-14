@@ -42,6 +42,19 @@ function lev(a, b) {
 const sim = (a, b) => { a = norm(a); b = norm(b); const l = Math.max(a.length, b.length) || 1; return 1 - lev(a, b) / l; };
 const words = s => norm(s).split(" ").filter(Boolean);
 
+/* ---------- Silben & Betonung ---------- */
+function sylHTML(parts) {
+  return parts.map(x => (x.pre ? esc(x.pre) : "") + x.syl.map((s, i) =>
+    i === x.stress && x.syl.length > 1 ? `<span class="st">ˈ${esc(s)}</span>` : `<span>${esc(s)}</span>`).join('<i class="dotsep">·</i>') + (x.post ? esc(x.post) : "")).join(" ");
+}
+function sylBlock(no, pron) {
+  const n = SYLL.analyze(no, "no");
+  let h = `<div class="syl" title="Silben, betonte Silbe fett">${sylHTML(n)}</div>`;
+  if (pron) h += `<div class="pron">[${sylHTML(SYLL.analyzePron(no, pron))}]${/\(/.test(pron) ? ` <small>${esc(pron.match(/\((.*?)\)/)[1])}</small>` : ""}</div>`;
+  return h;
+}
+const SYLL = window.SYLL;
+
 /* ---------- Sprache: Vorlesen & Erkennen ---------- */
 let voice = null;
 function findVoice() {
@@ -187,8 +200,8 @@ function openLesson(id) {
 
 function cardFace(no, de, pron, opts) {
   return `<div class="flip" id="flip"><div class="flip-inner">
-    <div class="face"><div class="big">${esc(opts && opts.rev ? de : no)}</div>${!(opts && opts.rev) && pron ? `<div class="pron">[${esc(pron)}]</div>` : ""}<div class="hint">Antippen zum Umdrehen</div></div>
-    <div class="face rear"><div class="big">${esc(opts && opts.rev ? no : de)}</div>${opts && opts.rev && pron ? `<div class="pron">[${esc(pron)}]</div>` : ""}</div>
+    <div class="face"><div class="big">${esc(opts && opts.rev ? de : no)}</div>${!(opts && opts.rev) ? sylBlock(no, pron) : ""}<div class="hint">Antippen zum Umdrehen</div></div>
+    <div class="face rear"><div class="big">${esc(opts && opts.rev ? no : de)}</div>${opts && opts.rev ? sylBlock(no, pron) : ""}</div>
   </div></div>
   <div class="sbtns"><button class="icon" id="say" aria-label="Anhören">🔊</button><button class="icon" id="slow" aria-label="Langsam anhören">🐢</button>${canListen ? `<button class="icon" id="mic" aria-label="Nachsprechen">🎤</button>` : ""}</div>
   <div class="speakres center" id="sres"></div>`;
@@ -253,6 +266,10 @@ function itemQ(item, type, L, lid) {
     case "write": return { t: "write", label: "Schreiben", prompt: `Schreib auf Norwegisch: „${de}“`, ans: no, no, key };
     case "dict": return { t: "write", label: "Diktat", prompt: "Hör zu und schreib, was du hörst.", audio: no, ans: no, no, key };
     case "speak": return { t: "speak", label: "Sprechen", prompt: no, sub: de, pron, ans: no, no, key };
+    case "stress": {
+      const p = SYLL.analyze(no, "no")[0];
+      return { t: "stress", label: "Betonung", prompt: "Welche Silbe wird betont?", word: no, de, syl: p.syl, ans: p.syl.map((s, i) => i === p.stress ? "ˈ" + s : s).join("·"), right: p.stress, no, key };
+    }
   }
 }
 function sentQ(s, type, lid) {
@@ -261,6 +278,8 @@ function sentQ(s, type, lid) {
   if (type === "dict") return { t: "write", label: "Diktat", prompt: "Hör zu und schreib den Satz.", audio: no, ans: no, no, key };
   return { t: "speak", label: "Sprechen", prompt: no, sub: de, ans: no, no, key };
 }
+const stressable = it => !/\s/.test(it[0].trim()) && SYLL.analyze(it[0], "no")[0].syl.length > 1;
+function stressQs(items, L, lid, n) { return pick(items.filter(stressable), n).map(it => itemQ(it, "stress", L, lid)); }
 function textQs(les) {
   if (!les.text) return [];
   return les.text.q.map(q => ({ t: "text", label: "Leseverstehen", text: les.text, prompt: q[0], opts: shuffle([q[1], q[2], q[3]]), ans: q[1] }));
@@ -278,6 +297,8 @@ function lessonQuestions(les, L) {
   const ss = pick(les.sent, 3);
   const st = ["order", canListen ? "speak" : "order", "dict"];
   ss.forEach((s, i) => qs.push(sentQ(s, st[i], les.id)));
+  const rest = les.items.filter(it => !items.includes(it) && stressable(it));
+  stressQs(rest.length ? rest : les.items, L, les.id, levelIdx(L.id) === 0 ? 2 : 1).forEach(q => qs.push(q));
   let all = shuffle(qs);
   all = all.concat(textQs(les));
   if (les.write) all.push({ t: "compose", label: "Freies Schreiben", prompt: les.write.task, need: les.write.need, min: les.write.min });
@@ -296,6 +317,8 @@ function examQuestions(L) {
     qs.push(itemQ(x.it, ty, L, x.les.id));
   });
   sents.slice(0, 4).forEach((x, i) => qs.push(sentQ(x.s, i % 2 ? "dict" : "order", x.les.id)));
+  const st = items.slice(EXAM_SIZE - 4).find(x => stressable(x.it));
+  if (st) { qs.pop(); qs.push(itemQ(st.it, "stress", L, st.les.id)); }
   let out = shuffle(qs);
   if (texts.length) out = out.concat(textQs(texts[0]));
   return out.slice(0, EXAM_SIZE);
@@ -382,7 +405,7 @@ function renderQ(q, el, answer) {
     let head = "";
     if (q.t === "listen") head = `<div class="prompt">${esc(q.prompt)}</div><div class="sbtns" style="justify-content:flex-start;margin-bottom:14px"><button class="icon" id="pa">🔊</button><button class="icon" id="ps">🐢</button></div>`;
     else if (q.t === "text") head = `<div class="card reading">${esc(q.text.no)}<details><summary>Übersetzung anzeigen</summary><p class="muted">${esc(q.text.de)}</p></details><div class="sbtns" style="justify-content:flex-start"><button class="icon" id="pa">🔊</button></div></div><div class="prompt">${esc(q.prompt)}</div>`;
-    else head = `<div class="prompt">${esc(q.prompt)}${q.pron ? `<div class="pron" style="font-size:16px">[${esc(q.pron)}]</div>` : ""}</div>${q.no && q.prompt === q.no ? `<div class="sbtns" style="justify-content:flex-start;margin:-6px 0 14px"><button class="icon" id="pa">🔊</button></div>` : ""}`;
+    else head = `<div class="prompt">${esc(q.prompt)}${q.t === "choose" && q.no === q.prompt ? `<div style="font-size:16px;font-weight:400">${sylBlock(q.no, q.pron)}</div>` : ""}</div>${q.no && q.prompt === q.no ? `<div class="sbtns" style="justify-content:flex-start;margin:-6px 0 14px"><button class="icon" id="pa">🔊</button></div>` : ""}`;
     el.innerHTML = head + `<div class="opts">${q.opts.map((o, i) => `<button class="opt" data-i="${i}">${esc(o)}</button>`).join("")}</div>`;
     const pa = el.querySelector("#pa"), ps = el.querySelector("#ps");
     const audio = q.t === "text" ? q.text.no : q.audio || q.no;
@@ -438,7 +461,7 @@ function renderQ(q, el, answer) {
   } else if (q.t === "speak") {
     let tries = 0;
     el.innerHTML = `<div class="prompt">Sprich nach:</div>
-      <div class="card center"><div class="big">${esc(q.prompt)}</div>${q.pron ? `<div class="pron">[${esc(q.pron)}]</div>` : ""}<p class="muted">${esc(q.sub)}</p>
+      <div class="card center"><div class="big">${esc(q.prompt)}</div>${sylBlock(q.prompt, q.pron)}<p class="muted">${esc(q.sub)}</p>
       <div class="sbtns"><button class="icon" id="pa">🔊</button><button class="icon" id="ps">🐢</button></div></div>
       <button class="btn red" id="mic">🎤 Tippen und sprechen</button><div class="speakres center" id="sres"></div>
       <button class="btn ghost" id="skip">Ich kann gerade nicht sprechen</button>`;
@@ -452,6 +475,22 @@ function renderQ(q, el, answer) {
       else if (tries >= 3) setTimeout(() => once(false, false, "Drei Versuche – hör dir das Wort nochmal genau an."), 900);
     });
     el.querySelector("#skip").onclick = () => once(false, true);
+  } else if (q.t === "stress") {
+    el.innerHTML = `<div class="prompt">${esc(q.prompt)}</div>
+      <div class="card center"><div class="big">${esc(q.word)}</div><p class="muted">${esc(q.de)}</p>
+      <div class="sbtns"><button class="icon" id="pa">🔊</button><button class="icon" id="ps">🐢</button></div></div>
+      <p class="muted">Hör genau hin und tippe die betonte Silbe an:</p>
+      <div class="tiles pool" style="justify-content:center">${q.syl.map((s, i) => `<button class="tile big-tile" data-s="${i}">${esc(s)}</button>`).join("")}</div>`;
+    el.querySelector("#pa").onclick = () => speak(q.word);
+    el.querySelector("#ps").onclick = () => speak(q.word, true);
+    setTimeout(() => speak(q.word), 300);
+    el.querySelectorAll("[data-s]").forEach(b => b.onclick = () => {
+      if (answered) return;
+      const ok = +b.dataset.s === q.right;
+      el.querySelectorAll("[data-s]").forEach(x => { if (+x.dataset.s === q.right) x.classList.add("right"); });
+      if (!ok) b.classList.add("wrong");
+      once(ok, false, `Silben: <b>${esc(q.ans)}</b>`);
+    });
   } else if (q.t === "compose") {
     el.innerHTML = `<div class="prompt">${esc(q.prompt)}</div>
       <p class="muted">Pflichtwörter: ${q.need.map(n => `<b>${esc(n)}</b>`).join(", ")} · mindestens ${q.min} Wörter</p>

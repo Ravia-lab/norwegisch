@@ -133,3 +133,13 @@ body.focus .tabs{display:none}
 body.focus{padding-bottom:0}
 .notice{background:var(--nbg);color:var(--nfg);border-radius:12px;padding:10px 12px;font-size:14px;margin-bottom:12px}
 label.set{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0}
+
+/* Silben */
+.syl{margin-top:8px;font-size:19px;letter-spacing:.02em;color:var(--text)}
+.syl span,.pron span{display:inline-block}
+.st{font-weight:800;color:var(--red);text-decoration:underline;text-underline-offset:4px}
+.pron .st{color:inherit}
+.dotsep{font-style:normal;color:var(--muted);padding:0 2px}
+.tile.big-tile{font-size:22px;padding:12px 18px;font-weight:700}
+.tile.right{border-color:var(--ok);background:var(--okbg)}
+.tile.wrong{border-color:var(--bad);background:var(--badbg)}
