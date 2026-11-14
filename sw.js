@@ -1,5 +1,5 @@
-const CACHE = "norsk-v14";
-const FILES = ["./", "index.html", "style.css", "app.js", "data.js", "more-a1.js", "more-a2.js", "more-b1.js", "more-b2.js", "more-c1.js", "more-freq.js", "vocab-a.js", "vocab-b1.js", "vocab-b2.js", "vocab-c1.js", "vocab-eigen.js", "syll.js", "dialogs.js", "viking.js", "manifest.webmanifest", "icon.svg", "icon-192.png", "icon-512.png"];
+const CACHE = "norsk-v15";
+const FILES = ["./", "index.html", "style.css", "app.js", "data.js", "more-a1.js", "more-a2.js", "more-b1.js", "more-b2.js", "more-c1.js", "more-freq.js", "vocab-a.js", "vocab-b1.js", "vocab-b2.js", "vocab-c1.js", "vocab-eigen.js", "vocab-a2x.js", "vocab-themes.js", "syll.js", "dialogs.js", "viking.js", "manifest.webmanifest", "icon.svg", "icon-192.png", "icon-512.png"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES))); self.skipWaiting(); });
 self.addEventListener("activate", e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k))))); self.clients.claim(); });
 self.addEventListener("fetch", e => {
