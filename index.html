@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Norsk – Norwegisch lernen</title>
+<meta name="description" content="Norwegisch lernen von null bis C1: hören, lesen, schreiben, sprechen.">
+<meta name="theme-color" content="#00205b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Norsk">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <button class="back hidden" id="backBtn" aria-label="Zurück">‹</button>
+  <div class="brand" id="brand"><span class="flag" aria-hidden="true"></span>Norsk</div>
+  <div class="stats" id="stats"></div>
+</header>
+<main id="app" aria-live="polite"></main>
+<nav class="tabs" id="tabs">
+  <button data-tab="home" class="active"><span>🧭</span>Lernen</button>
+  <button data-tab="cards"><span>🃏</span>Karten</button>
+  <button data-tab="sounds"><span>🔊</span>Laute</button>
+  <button data-tab="me"><span>⭐</span>Fortschritt</button>
+</nav>
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
