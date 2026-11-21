@@ -212,6 +212,7 @@ function render() {
   else if (tab === "cards") renderCards();
   else if (tab === "sounds") renderSounds();
   else if (tab === "dialogs") renderDialogs();
+  else if (tab === "lex") renderLex();
   else renderMe();
 }
 
@@ -1079,6 +1080,274 @@ let deferredPrompt = null;
 window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); deferredPrompt = e; });
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
   window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+}
+
+/* ---------- Wörterbuch (Deutsch ↔ Norwegisch) und Kamera-Scanner ---------- */
+// Nutzt die globalen Helfer aus app.js: ALLWORDS, VOC, LEVELS, S, save, speak, esc, fold, lev, $app, setFocus, toast, today, VIKING
+const LEX = (() => {
+  const strip = s => s.replace(/\([^)]*\)/g, " ").replace(/\b(der|die|das|ein|eine|einen|sich|jdn|jdm|etw|en|ei|et|å|seg)\b/gi, " ");
+  const keys = s => { const out = new Set(); const f = fold(s); if (f) out.add(f);
+    strip(s).split(/[\/;,]|\bbzw\b|\boder\b/).forEach(p => { const k = fold(p); if (k && k.length > 1) out.add(k); });
+    return [...out]; };
+  const seen = new Map(), list = [];
+  ALLWORDS.forEach(w => {
+    const id = w.no.toLowerCase() + "=" + w.de.toLowerCase();
+    if (seen.has(id)) return; seen.set(id, 1);
+    list.push(Object.assign({}, w, { kn: keys(w.no), kd: keys(w.de) }));
+  });
+  return list;
+})();
+const COCO_NO = {
+  "person": ["en person", "Person"], "bicycle": ["en sykkel", "Fahrrad"], "car": ["en bil", "Auto"], "motorcycle": ["en motorsykkel", "Motorrad"],
+  "airplane": ["et fly", "Flugzeug"], "bus": ["en buss", "Bus"], "train": ["et tog", "Zug"], "truck": ["en lastebil", "Lastwagen"], "boat": ["en båt", "Boot"],
+  "traffic light": ["et trafikklys", "Ampel"], "fire hydrant": ["en brannhydrant", "Hydrant"], "stop sign": ["et stoppskilt", "Stoppschild"],
+  "parking meter": ["en parkeringsautomat", "Parkuhr"], "bench": ["en benk", "Bank"], "bird": ["en fugl", "Vogel"], "cat": ["en katt", "Katze"],
+  "dog": ["en hund", "Hund"], "horse": ["en hest", "Pferd"], "sheep": ["en sau", "Schaf"], "cow": ["ei ku", "Kuh"], "elephant": ["en elefant", "Elefant"],
+  "bear": ["en bjørn", "Bär"], "zebra": ["en sebra", "Zebra"], "giraffe": ["en sjiraff", "Giraffe"], "backpack": ["en ryggsekk", "Rucksack"],
+  "umbrella": ["en paraply", "Regenschirm"], "handbag": ["ei veske", "Handtasche"], "tie": ["et slips", "Krawatte"], "suitcase": ["en koffert", "Koffer"],
+  "frisbee": ["en frisbee", "Frisbee"], "skis": ["ski", "Skier"], "snowboard": ["et snøbrett", "Snowboard"], "sports ball": ["en ball", "Ball"],
+  "kite": ["en drage", "Drachen"], "baseball bat": ["et balltre", "Baseballschläger"], "baseball glove": ["en baseballhanske", "Baseballhandschuh"],
+  "skateboard": ["et skateboard", "Skateboard"], "surfboard": ["et surfebrett", "Surfbrett"], "tennis racket": ["en tennisracket", "Tennisschläger"],
+  "bottle": ["ei flaske", "Flasche"], "wine glass": ["et vinglass", "Weinglas"], "cup": ["en kopp", "Tasse"], "fork": ["ei gaffel", "Gabel"],
+  "knife": ["en kniv", "Messer"], "spoon": ["ei skje", "Löffel"], "bowl": ["en bolle", "Schüssel"], "banana": ["en banan", "Banane"],
+  "apple": ["et eple", "Apfel"], "sandwich": ["et smørbrød", "belegtes Brot"], "orange": ["en appelsin", "Orange"], "broccoli": ["en brokkoli", "Brokkoli"],
+  "carrot": ["ei gulrot", "Karotte"], "hot dog": ["en pølse i brød", "Hotdog"], "pizza": ["en pizza", "Pizza"], "donut": ["en smultring", "Donut"],
+  "cake": ["ei kake", "Kuchen"], "chair": ["en stol", "Stuhl"], "couch": ["en sofa", "Sofa"], "potted plant": ["en potteplante", "Topfpflanze"],
+  "bed": ["ei seng", "Bett"], "dining table": ["et spisebord", "Esstisch"], "toilet": ["et toalett", "Toilette"], "tv": ["en TV", "Fernseher"],
+  "laptop": ["en bærbar PC", "Laptop"], "mouse": ["ei mus", "Computermaus"], "remote": ["en fjernkontroll", "Fernbedienung"],
+  "keyboard": ["et tastatur", "Tastatur"], "cell phone": ["en mobil", "Handy"], "microwave": ["en mikrobølgeovn", "Mikrowelle"],
+  "oven": ["en stekeovn", "Backofen"], "toaster": ["en brødrister", "Toaster"], "sink": ["en vask", "Spüle / Waschbecken"],
+  "refrigerator": ["et kjøleskap", "Kühlschrank"], "book": ["ei bok", "Buch"], "clock": ["ei klokke", "Uhr"], "vase": ["en vase", "Vase"],
+  "scissors": ["ei saks", "Schere"], "teddy bear": ["en teddybjørn", "Teddybär"], "hair drier": ["en hårføner", "Föhn"], "toothbrush": ["ei tannbørste", "Zahnbürste"]
+};
+// norwegische Endungen, damit auch gebeugte Formen (bilen, husene, snakket) gefunden werden
+const NO_SUFFIX = ["ene", "ane", "erne", "ende", "ere", "est", "ete", "het", "en", "et", "ei", "a", "er", "te", "de", "dd", "r", "e", "t"];
+function lexSearch(q) {
+  const t = fold(q); if (t.length < 1) return [];
+  const sc = (k, t) => k === t ? 0 : k.startsWith(t + " ") || k.startsWith(t) && t.length >= 3 && k.length - t.length <= 2 ? 1 : k.startsWith(t) ? 2 : (" " + k).includes(" " + t) ? 3 : t.length >= 3 && k.includes(t) ? 5 : 99;
+  let hits = [];
+  LEX.forEach(w => {
+    let s = 99;
+    w.kn.forEach(k => { s = Math.min(s, sc(k, t)); });
+    w.kd.forEach(k => { s = Math.min(s, sc(k, t) + 0.5); });
+    if (s < 99) hits.push([s + (w.no.length > 30 ? 1 : 0), w]);
+  });
+  if (hits.filter(h => h[0] < 2).length < 3 && t.length >= 4) {
+    NO_SUFFIX.forEach(sf => { if (!t.endsWith(sf) || t.length - sf.length < 2) return; const b = t.slice(0, -sf.length);
+      LEX.forEach(w => { if (w.kn.some(k => k === b || k === b + "e" || k === b + "e " || k === b + "a")) hits.push([1.5, w]); }); });
+  }
+  if (hits.length < 4 && t.length >= 4) {
+    const max = t.length >= 7 ? 2 : 1;
+    LEX.forEach(w => { [...w.kn, ...w.kd].forEach(k => { if (Math.abs(k.length - t.length) <= max && lev(k, t) <= max) hits.push([6, w]); }); });
+  }
+  const best = new Map();
+  hits.forEach(([s, w]) => { if (!best.has(w) || best.get(w) > s) best.set(w, s); });
+  return [...best].sort((a, b) => a[1] - b[1] || a[0].no.length - b[0].no.length).map(x => x[0]).slice(0, 60);
+}
+function lexExamples(w) {
+  const base = fold(w.no.replace(/^(en|ei|et|å)\s+/i, "")).split(" ")[0];
+  if (!base || base.length < 2) return [];
+  const re = new RegExp("(^| )" + base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(e|en|et|a|er|ene|te|de|r|t|s)?( |$)");
+  const out = [];
+  LEVELS.forEach(L => L.lessons.forEach(l => (l.sent || []).forEach(s => { if (out.length < 4 && re.test(fold(s[0]))) out.push(s); })));
+  (window.DIALOGS || []).forEach(d => d.lines.forEach(x => { if (out.length < 4 && re.test(fold(x[1]))) out.push([x[1], x[2]]); }));
+  return out;
+}
+function lexLinks(q) {
+  const u = encodeURIComponent(q);
+  return `<div class="lexlinks"><a href="https://ordbokene.no/nob/bm/${u}" target="_blank" rel="noopener">📘 Ordbøkene</a>
+    <a href="https://www.deepl.com/translator#nb/de/${u}" target="_blank" rel="noopener">🔷 DeepL</a>
+    <a href="https://translate.google.com/?sl=auto&tl=de&text=${u}" target="_blank" rel="noopener">🌐 Google</a></div>`;
+}
+function lexRow(w, i) {
+  return `<button class="wrow" data-i="${i}"><span><b>${esc(w.no)}</b><small>${esc(w.de)}</small></span><span class="muted lvt">${esc(w.lv || "")}</span></button>`;
+}
+function lexHist(q) {
+  S.lexh = (S.lexh || []).filter(x => x !== q); S.lexh.unshift(q); S.lexh = S.lexh.slice(0, 12);
+  S.st = S.st || {}; S.st.lex = (S.st.lex || 0) + 1; save();
+}
+let lexQ = "";
+function renderLex() {
+  const hist = S.lexh || [];
+  $app.innerHTML = `<h1>Wörterbuch</h1>
+    <div class="coach small">${VIKING.html("happy", 64, ["Slå opp!", "Tipp ein Wort, norwegisch oder deutsch. Oder lass die Kamera schauen."])}</div>
+    <input class="txt" id="lq" type="search" placeholder="🔍 z. B. „Haus“, „hus“, „bilen“ …" autocomplete="off" autocapitalize="off" spellcheck="false" value="${esc(lexQ)}">
+    <div class="row scanrow"><button class="btn ghost" id="scanT">📷 Text scannen</button><button class="btn ghost" id="scanO">🍎 Gegenstand</button></div>
+    <div id="lres"></div>
+    <p class="muted center" style="font-size:13px">${LEX.length.toLocaleString("de-DE")} Einträge · Deutsch ↔ Bokmål</p>`;
+  const q = document.getElementById("lq"), res = document.getElementById("lres");
+  const run = () => {
+    lexQ = q.value.trim();
+    if (!lexQ) {
+      res.innerHTML = hist.length ? `<div class="card"><b>Zuletzt gesucht</b><div class="chips" style="margin-top:8px">${hist.map(h => `<button class="chip" data-h="${esc(h)}"><b>${esc(h)}</b></button>`).join("")}</div></div>` : "";
+      res.querySelectorAll("[data-h]").forEach(b => b.onclick = () => { q.value = b.dataset.h; run(); });
+      return;
+    }
+    const hits = lexSearch(lexQ);
+    res.innerHTML = hits.length ? `<div class="card wl">${hits.map(lexRow).join("")}</div>${hits.length < 3 ? `<p class="muted" style="font-size:14px">Nicht das Richtige? Schau extern nach:</p>${lexLinks(lexQ)}` : ""}`
+      : `<div class="card"><p style="margin-top:0">Kein Eintrag für „${esc(lexQ)}“ in der App.</p>${lexLinks(lexQ)}</div>`;
+    res.querySelectorAll(".wrow").forEach(b => b.onclick = () => { lexHist(lexQ); lexDetail(hits[+b.dataset.i]); });
+  };
+  let tmr; q.oninput = () => { clearTimeout(tmr); tmr = setTimeout(run, 120); };
+  q.onkeydown = e => { if (e.key === "Enter") { q.blur(); if (q.value.trim()) lexHist(q.value.trim()); } };
+  run();
+  document.getElementById("scanT").onclick = () => openScanner("text");
+  document.getElementById("scanO").onclick = () => openScanner("obj");
+}
+function lexDetail(w, back) {
+  setFocus(true);
+  const ex = lexExamples(w), inDeck = w.key && S.cards[w.key];
+  const word = w.no.replace(/\s*\([^)]*\)\s*/g, " ").trim();
+  $app.innerHTML = `<div class="card lexcard">
+      <div class="muted" style="font-size:13px">${esc(w.lv || "")}${w.t ? " · " + esc(w.t) : ""}</div>
+      <h1 style="margin:4px 0 2px">${esc(w.no)}</h1>
+      ${w.pron ? `<div class="muted">[${esc(w.pron)}]</div>` : ""}
+      <p style="font-size:20px;margin:10px 0 14px">🇩🇪 ${esc(w.de)}</p>
+      <div class="row"><button class="btn" id="ls">🔊 Anhören</button><button class="btn ghost" id="lsl">🐢 Langsam</button></div>
+      ${w.key ? `<button class="btn ${inDeck ? "ghost" : ""}" id="ladd" ${inDeck ? "disabled" : ""} style="margin-top:8px">${inDeck ? "✓ Schon im Karteikasten" : "＋ Zum Lernen hinzufügen"}</button>` : ""}
+    </div>
+    ${ex.length ? `<div class="card"><b>Beispiele aus der App</b>${ex.map((s, i) => `<p class="lexex"><a href="#" data-x="${i}">🔊</a> <b>${esc(s[0])}</b><br><span class="muted">${esc(s[1])}</span></p>`).join("")}</div>` : ""}
+    <div class="card"><b>Mehr dazu</b><p class="muted" style="font-size:14px;margin:4px 0 8px">Ordbøkene ist das offizielle Wörterbuch der Sprachbehörde und zeigt alle Beugungsformen.</p>${lexLinks(word.replace(/^(en|ei|et|å)\s+/i, ""))}</div>
+    <button class="btn ghost" id="lb">‹ Zurück</button>`;
+  document.getElementById("ls").onclick = () => speak(word);
+  document.getElementById("lsl").onclick = () => speak(word, true);
+  $app.querySelectorAll("[data-x]").forEach(a => a.onclick = e => { e.preventDefault(); speak(ex[+a.dataset.x][0]); });
+  const add = document.getElementById("ladd");
+  if (add && !inDeck) add.onclick = () => { S.cards[w.key] = { b: 1, d: today() }; save(); add.disabled = true; add.classList.add("ghost"); add.textContent = "✓ Im Karteikasten"; toast("Kommt ab heute in deinen Wiederholungen 📚"); };
+  document.getElementById("lb").onclick = back || (() => { setFocus(false); renderLex(); });
+  speak(word);
+  window.scrollTo(0, 0);
+}
+
+/* ---------- Kamera-Scanner ---------- */
+let scanStream = null, scanLoop = 0, ocrWorker = null, cocoModel = null;
+function loadScript(src) {
+  return new Promise((ok, bad) => { if (document.querySelector(`script[src="${src}"]`)) return ok();
+    const s = document.createElement("script"); s.src = src; s.onload = ok; s.onerror = () => bad(new Error("load " + src)); document.head.appendChild(s); });
+}
+function stopScan() {
+  cancelAnimationFrame(scanLoop); scanLoop = 0;
+  if (scanStream) { scanStream.getTracks().forEach(t => t.stop()); scanStream = null; }
+}
+document.getElementById("tabs").addEventListener("click", stopScan, true);
+document.getElementById("backBtn").addEventListener("click", stopScan, true);
+document.addEventListener("visibilitychange", () => { if (document.hidden) stopScan(); });
+async function getOcr(status) {
+  if (ocrWorker) return ocrWorker;
+  status("Texterkennung wird geladen (einmalig ca. 7 MB) …");
+  await loadScript("lib/tess/tesseract.min.js");
+  ocrWorker = await Tesseract.createWorker(["nor", "deu"], 1, {
+    workerPath: "lib/tess/worker.min.js", corePath: "lib/tess/", langPath: "lib/tess/lang", gzip: true,
+    logger: m => { if (m.status === "recognizing text") status(`Lese Text … ${Math.round(m.progress * 100)} %`); }
+  });
+  return ocrWorker;
+}
+async function getCoco(status) {
+  if (cocoModel) return cocoModel;
+  status("Objekterkennung wird geladen (einmalig ca. 22 MB) …");
+  await loadScript("lib/coco/tf.min.js");
+  await loadScript("lib/coco/coco-ssd.min.js");
+  cocoModel = await cocoSsd.load({ base: "lite_mobilenet_v2", modelUrl: "lib/coco/model.json" });
+  return cocoModel;
+}
+function openScanner(mode) {
+  stopScan(); setFocus(true);
+  $app.innerHTML = `<div class="seg" id="smode"><button data-m="text" class="${mode === "text" ? "on" : ""}">📝 Text</button><button data-m="obj" class="${mode === "obj" ? "on" : ""}">🍎 Gegenstand</button></div>
+    <div class="scanbox" id="sbox"><video id="sv" playsinline muted autoplay></video><canvas id="sov"></canvas>${mode === "text" ? `<div class="scanframe"></div>` : ""}</div>
+    <p class="muted center" id="sst" style="font-size:14px;min-height:20px">${mode === "text" ? "Halte die Kamera auf ein Schild, eine Packung oder einen Brief." : "Richte die Kamera auf einen Gegenstand."}</p>
+    <div class="row"><button class="btn" id="sgo">${mode === "text" ? "📸 Text lesen" : "📸 Was ist das?"}</button><label class="btn ghost" style="text-align:center">🖼️ Foto<input type="file" accept="image/*" id="sfile" hidden></label></div>
+    <div id="sout"></div>
+    <details class="card" style="margin-top:10px"><summary class="muted">Was der Scanner kann</summary><p class="muted" style="font-size:14px">${mode === "text"
+      ? "Liest gedruckten Text (Norwegisch und Deutsch) direkt auf dem Handy, ohne Upload. Am besten bei gutem Licht, gerade und nah. Handschrift klappt kaum. Jedes erkannte Wort kannst du antippen und nachschlagen."
+      : "Erkennt rund 80 Alltagsdinge (z. B. Tasse, Flasche, Stuhl, Banane, Auto, Hund, Handy, Buch) direkt auf dem Handy. Alles andere kennt das Modell nicht. Für Verpackungen und Schilder nimm den Text-Modus."}</p></details>`;
+  const st = t => { const e = document.getElementById("sst"); if (e) e.textContent = t; };
+  const v = document.getElementById("sv"), out = document.getElementById("sout");
+  document.querySelectorAll("#smode button").forEach(b => b.onclick = () => openScanner(b.dataset.m));
+  const startCam = async () => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { st("Keine Kamera verfügbar. Wähle ein Foto aus."); return; }
+    try {
+      scanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
+      v.srcObject = scanStream; await v.play().catch(() => {});
+      if (mode === "obj") liveObjects();
+    } catch (e) { st("Kamera nicht erlaubt. Erlaube sie in Chrome (Schloss-Symbol › Berechtigungen) oder wähle ein Foto."); }
+  };
+  const snap = src => { const c = document.createElement("canvas"); const w = src.videoWidth || src.naturalWidth, h = src.videoHeight || src.naturalHeight;
+    if (!w) return null; c.width = w; c.height = h; c.getContext("2d").drawImage(src, 0, 0, w, h); return c; };
+  const prep = c => { // für OCR: Graustufen und Kontrast
+    const x = c.getContext("2d"), d = x.getImageData(0, 0, c.width, c.height), p = d.data;
+    for (let i = 0; i < p.length; i += 4) { let g = p[i] * .3 + p[i + 1] * .59 + p[i + 2] * .11; g = Math.max(0, Math.min(255, (g - 128) * 1.4 + 128)); p[i] = p[i + 1] = p[i + 2] = g; }
+    x.putImageData(d, 0, 0); return c; };
+  const doText = async c => {
+    const btn = document.getElementById("sgo"); btn.disabled = true;
+    try {
+      const wk = await getOcr(st); st("Lese Text …");
+      const { data } = await wk.recognize(prep(c));
+      showText(data.text || "", out); st(data.text && data.text.trim() ? "Tippe ein Wort an, um es nachzuschlagen." : "Kein Text erkannt. Näher ran und für gutes Licht sorgen.");
+    } catch (e) { st("Texterkennung hat nicht geklappt. Bist du online? Beim ersten Mal wird sie geladen."); console.warn(e); }
+    btn.disabled = false;
+  };
+  const doObj = async c => {
+    try { const m = await getCoco(st); const preds = await m.detect(c, 6, 0.4); showObjects(preds, out, st); } catch (e) { st("Objekterkennung hat nicht geklappt. Bist du online? Beim ersten Mal wird sie geladen."); console.warn(e); }
+  };
+  async function liveObjects() {
+    let m; try { m = await getCoco(st); } catch (e) { st("Objekterkennung konnte nicht geladen werden. Bist du online?"); return; }
+    st("Erkenne live … tippe ein Ergebnis an.");
+    const ov = document.getElementById("sov"); let last = 0, busy = false, prevKey = "";
+    const tick = async ts => {
+      if (!scanStream || !document.getElementById("sov")) return;
+      scanLoop = requestAnimationFrame(tick);
+      if (busy || ts - last < 600 || !v.videoWidth) return;
+      busy = true; last = ts;
+      try {
+        const preds = await m.detect(v, 6, 0.5);
+        ov.width = v.videoWidth; ov.height = v.videoHeight; const x = ov.getContext("2d"); x.clearRect(0, 0, ov.width, ov.height);
+        x.lineWidth = Math.max(3, ov.width / 200); x.font = `bold ${Math.max(18, ov.width / 28)}px Nunito, sans-serif`;
+        preds.forEach(p => { const [bx, by, bw, bh] = p.bbox, n = COCO_NO[p.class]; x.strokeStyle = "#ffcc00"; x.strokeRect(bx, by, bw, bh);
+          if (n) { const lab = n[0]; const tw = x.measureText(lab).width + 12, th = Math.max(24, ov.width / 22); x.fillStyle = "#00205bdd"; x.fillRect(bx, Math.max(0, by - th), tw, th); x.fillStyle = "#fff"; x.fillText(lab, bx + 6, Math.max(th - 6, by - 6)); } });
+        const key = [...new Set(preds.map(p => p.class))].sort().join(",");
+        if (key !== prevKey) { prevKey = key; showObjects(preds, out, null); }
+      } catch (e) {}
+      busy = false;
+    };
+    scanLoop = requestAnimationFrame(tick);
+  }
+  document.getElementById("sgo").onclick = () => { const c = snap(v); if (!c) { st("Die Kamera ist noch nicht bereit. Oder wähle ein Foto."); return; } mode === "text" ? doText(c) : doObj(c); };
+  document.getElementById("sfile").onchange = e => {
+    const f = e.target.files[0]; if (!f) return;
+    const img = new Image(); img.onload = () => { const c = snap(img); URL.revokeObjectURL(img.src); if (c) mode === "text" ? doText(c) : doObj(c); };
+    img.src = URL.createObjectURL(f);
+  };
+  startCam();
+}
+function showObjects(preds, out, st) {
+  const seen = new Set(), items = [];
+  preds.forEach(p => { if (seen.has(p.class) || !COCO_NO[p.class]) return; seen.add(p.class); items.push([p, COCO_NO[p.class]]); });
+  if (!items.length) { out.innerHTML = `<div class="card muted">Nichts erkannt, das ich kenne. Versuch einen anderen Winkel oder den Text-Modus.</div>`; if (st) st("Nichts erkannt."); return; }
+  out.innerHTML = `<div class="card wl">${items.map(([p, n], i) => `<button class="wrow" data-o="${i}"><span><b>${esc(n[0])}</b><small>${esc(n[1])}</small></span><span class="muted">${Math.round(p.score * 100)} % 🔊</span></button>`).join("")}</div>`;
+  out.querySelectorAll("[data-o]").forEach(b => b.onclick = () => { const n = items[+b.dataset.o][1]; speak(n[0]);
+    const hit = lexSearch(n[0].replace(/^(en|ei|et)\s+/, ""))[0]; if (hit && fold(hit.no).includes(fold(n[0].replace(/^(en|ei|et)\s+/, "")))) { stopScan(); lexHist(n[0]); lexDetail(hit, () => openScanner("obj")); } });
+  if (st) st("Tippe ein Ergebnis an.");
+}
+function showText(text, out) {
+  const toks = (text.match(/[A-Za-zÆØÅæøåÄÖÜäöüß-]{2,}/g) || []).map(w => w.replace(/^-+|-+$/g, "")).filter(w => w.length > 1);
+  const words = [...new Set(toks)].slice(0, 80);
+  const exact = k => LEX.find(w => w.kn.includes(k) || w.kd.includes(k));
+  const found = [], used = new Set();
+  for (let i = 0; i < toks.length && found.length < 40; i++) {
+    const pair = i + 1 < toks.length ? exact(fold(toks[i] + " " + toks[i + 1])) : null;
+    if (pair) { const p = toks[i] + " " + toks[i + 1]; if (!used.has(fold(p))) { used.add(fold(p)); found.push([p, pair]); } used.add(fold(toks[i])); used.add(fold(toks[i + 1])); i++; continue; }
+    const w = toks[i], f = fold(w); if (used.has(f)) continue; used.add(f);
+    const h = lexSearch(w)[0];
+    if (h && (fold(h.no).replace(/^(en|ei|et|aa) /, "").startsWith(f.slice(0, Math.max(3, f.length - 3))) || h.kd.some(k => k === f))) found.push([w, h]);
+  }
+  const fset = new Set(found.flatMap(f => f[0].split(" ")));
+  out.innerHTML = `<div class="card"><b>Erkannter Text</b><p class="ocrtext">${words.length ? words.map(w => `<button class="ocrw ${fset.has(w) ? "hit" : ""}" data-w="${esc(w)}">${esc(w)}</button>`).join(" ") : "<span class='muted'>—</span>"}</p>
+      <button class="btn ghost" id="ocrsay" ${text.trim() ? "" : "disabled"}>🔊 Ganzen Text vorlesen</button></div>
+    ${found.length ? `<div class="card wl"><div style="padding:8px 16px 0"><b>Gefunden im Wörterbuch</b></div>${found.map(([w, h], i) => `<button class="wrow" data-f="${i}"><span><b>${esc(w)}</b> <span class="muted">→ ${esc(h.no)}</span><small>${esc(h.de)}</small></span><span class="muted">›</span></button>`).join("")}</div>` : ""}`;
+  out.scrollIntoView({ behavior: "smooth", block: "start" });
+  document.getElementById("ocrsay").onclick = () => speak(text.replace(/\s+/g, " "));
+  out.querySelectorAll("[data-f]").forEach(b => b.onclick = () => { stopScan(); const h = found[+b.dataset.f][1]; lexHist(found[+b.dataset.f][0]); lexDetail(h, () => openScanner("text")); });
+  out.querySelectorAll("[data-w]").forEach(b => b.onclick = () => { stopScan(); lexQ = b.dataset.w; tab = "lex"; document.querySelectorAll(".tabs button").forEach(x => x.classList.toggle("active", x.dataset.tab === "lex")); setFocus(false); renderLex(); });
 }
 
 render();
